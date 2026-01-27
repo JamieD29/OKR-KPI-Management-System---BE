@@ -1,19 +1,25 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { ValidationPipe } from '@nestjs/common';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable CORS for your frontend
+  // --- BẮT ĐẦU ĐOẠN CẦN THÊM ---
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true, // Tự động loại bỏ các trường thừa không có trong DTO
+      forbidNonWhitelisted: false, // Báo lỗi nếu gửi trường linh tinh lên
+      transform: true, // Tự động chuyển đổi kiểu dữ liệu (VD: chuỗi "1" -> số 1)
+    }),
+  );
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'], // Add your frontend URLs
-    credentials: true,
+    origin: true, // Cho phép tất cả các port (5173, 5174...) đều gọi được
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    credentials: true, // Cho phép gửi cookie/token xác thực
   });
+  // --- KẾT THÚC ĐOẠN CẦN THÊM ---
 
-  app.useGlobalPipes(new ValidationPipe());
-
-  await app.listen(3001); // Backend runs on port 3001
-  console.log('Backend running on http://localhost:3001');
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
