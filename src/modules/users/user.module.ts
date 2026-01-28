@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from '../../database/entities/user.entity'; // Sửa lại đường dẫn import user.entity nếu cần
+import { User } from '../../database/entities/user.entity';
+import { Role } from '../../database/entities/role.entity';
 import { UsersService } from './user.service';
-import { UsersController } from './user.controller'; // 👈 CÓ DÒNG NÀY CHƯA?
+
+import { UsersController } from './user.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([User])],
-  controllers: [UsersController], // 👈 CÓ NẰM TRONG NÀY CHƯA?
+  imports: [TypeOrmModule.forFeature([User, Role])],
+  controllers: [UsersController],
   providers: [UsersService],
   exports: [UsersService],
 })

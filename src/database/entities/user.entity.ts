@@ -129,7 +129,11 @@ export class User {
 
   // --- 👆 HẾT PHẦN THÊM MỚI ---
 
-  @ManyToOne(() => Department, (dept) => dept.users, { nullable: true, eager: true })
+  @ManyToOne(() => Department, (dept) => dept.users, {
+    nullable: true,
+    onDelete: 'SET NULL',
+    eager: true,
+  })
   @JoinColumn({ name: 'department_id' })
   department: Department;
 

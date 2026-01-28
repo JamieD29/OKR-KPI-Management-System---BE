@@ -22,7 +22,7 @@ export class DepartmentsController {
   }
 
   @Delete(':id')
-  @Roles('SYSTEM_ADMIN') // 👈 Chỉ cho phép SYSTEM_ADMIN xóa bộ môn
+  @Roles('SYSTEM_ADMIN', 'SUPER_ADMIN') // 👈 Chỉ cho phép SYSTEM_ADMIN xóa bộ môn
   remove(@Param('id') id: string) {
     return this.departmentsService.remove(id);
   }
