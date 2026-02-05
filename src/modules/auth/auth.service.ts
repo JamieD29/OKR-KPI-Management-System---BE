@@ -27,80 +27,81 @@ export class AuthService {
   // Hàm này được gọi bởi Google/Microsoft Strategy
   async validateOAuthLogin(reqUser: any) {
     const email = reqUser.email;
-
-    // Nếu không có email thì chặn luôn
     if (!email) throw new InternalServerErrorException('Email not found from provider');
 
-    const name = reqUser.firstName ? `${reqUser.firstName} ${reqUser.lastName}` : reqUser.name;
-    const avatar = reqUser.picture || reqUser.avatar || null;
-    const providerId = reqUser.id || reqUser.sub;
-    const provider = reqUser.provider || 'google'; // mặc định là google nếu thiếu
-
-    // ---------------------------------------------------------
-    // 🔥 LOGIC TỰ ĐỘNG PHÂN QUYỀN (AUTO ASSIGN ROLE)
-    // ---------------------------------------------------------
-
-    // 1. Kiểm tra xem User này đã tồn tại chưa?
+    // 1. Lấy thông tin User (nếu có)
     let user = await this.userRepository.findOne({
       where: { email },
-      relations: ['roles'], // Quan trọng: Phải load cả roles ra
+      relations: ['roles'],
     });
+
+    // ---------------------------------------------------------
+    // 🔥 SỬA LẠI: CHECK DOMAIN CHO TẤT CẢ (CŨ + MỚI)
+    // ---------------------------------------------------------
+
+    // Đếm user để biết có phải hệ thống mới tinh không
+    const userCount = await this.userRepository.count();
+    const isFirstUser = userCount === 0;
+
+    // Kiểm tra user hiện tại có phải Admin không (để tránh lock nhầm Admin)
+    // Nếu user chưa tồn tại (người mới) thì mặc định isAdmin = false
+    const isAdmin = user?.roles?.some((r) => r.slug === 'SYSTEM_ADMIN') || false;
+
+    // Lấy domain từ email
+    const domain = email.split('@')[1];
+    const isDomainAllowed = await this.domainRepository.findOne({ where: { domain } });
+
+    // LOGIC CHẶN:
+    // Nếu KHÔNG phải user đầu tiên (First User)
+    // VÀ KHÔNG phải là Admin (nếu là user cũ)
+    // VÀ Domain không nằm trong Whitelist
+    // -> THÌ CHẶN LUÔN
+    if (!isFirstUser && !isAdmin) {
+      if (!isDomainAllowed) {
+        console.warn(`⛔ Blocked login attempt: ${email} (Domain not allowed)`);
+        throw new ForbiddenException('DOMAIN_NOT_ALLOWED'); // Message này FE sẽ bắt để hiện trang 404
+      }
+    }
+
+    // ---------------------------------------------------------
+    // SAU KHI CHECK XONG MỚI ĐẾN ĐOẠN TẠO HOẶC UPDATE
+    // ---------------------------------------------------------
 
     // 2. Nếu chưa có User -> Tạo mới
     if (!user) {
-      // Đếm số lượng user đang có trong DB
-      const userCount = await this.userRepository.count();
+      // Logic xác định Role cho người mới
+      const roleSlug = isFirstUser ? 'SYSTEM_ADMIN' : 'USER'; // Sửa LECTURER -> USER theo DB mới
+      const roleName = isFirstUser ? 'System Admin' : 'User';
 
-      // Nếu count = 0 -> Đây là FIRST USER -> SYSTEM_ADMIN
-      // Nếu count > 0 -> Đây là user thường -> LECTURER
-      const isFirstUser = userCount === 0;
-      const roleSlug = isFirstUser ? 'SYSTEM_ADMIN' : 'LECTURER';
-      const roleName = isFirstUser ? 'System Admin' : 'Lecturer';
-
-      // 3. Tìm Role trong DB, nếu chưa có thì TỰ TẠO (Self-healing)
       let role = await this.roleRepository.findOne({ where: { slug: roleSlug } });
-
       if (!role) {
-        console.log(`⚠️ Role ${roleSlug} chưa tồn tại. Đang tự động tạo...`);
         role = await this.roleRepository.save({
           name: roleName,
           slug: roleSlug,
-          description: isFirstUser ? 'Super User - Auto generated' : 'Lecturer - Auto generated',
+          description: 'Auto generated',
         });
       }
 
-      // 4. Kiểm tra Whitelist (Chỉ check nếu KHÔNG PHẢI là First User)
-      // Nghĩa là: Ông đầu tiên luôn được vào. Ông thứ 2 trở đi mới bị check domain.
-      if (!isFirstUser) {
-        const domain = email.split('@')[1];
-        const isAllowed = await this.domainRepository.findOne({ where: { domain } });
-        if (!isAllowed) {
-          throw new ForbiddenException(
-            `Domain @${domain} is not authorized. Please contact Admin.`,
-          );
-        }
-      }
-
-      // 5. Tạo User mới với Role đã xác định
+      // Tạo user
       const newUser = this.userRepository.create({
         email,
-        name,
-        avatarUrl: avatar,
+        name: reqUser.firstName ? `${reqUser.firstName} ${reqUser.lastName}` : reqUser.name,
+        avatarUrl: reqUser.picture || reqUser.avatar,
         isActive: true,
-        googleId: provider === 'google' ? providerId : null,
-        microsoftId: provider === 'microsoft' ? providerId : null,
-        roles: [role], // Gán role ngay lập tức
+        googleId: reqUser.provider === 'google' ? reqUser.id || reqUser.sub : null,
+        microsoftId: reqUser.provider === 'microsoft' ? reqUser.id || reqUser.sub : null,
+        roles: [role],
       });
 
       user = await this.userRepository.save(newUser);
-
-      // Log ra để biết ông nào vừa đăng ký thành công
-      console.log(`✅ Created New User: ${email} | Role: ${roleSlug}`);
+      console.log(`✅ Created New User: ${email}`);
     } else {
-      // Nếu user đã tồn tại -> Update thông tin mới nhất (Avatar, Provider ID)
-      user.avatarUrl = avatar;
-      if (provider === 'google') user.googleId = providerId;
-      if (provider === 'microsoft') user.microsoftId = providerId;
+      // 3. User cũ -> Cập nhật info
+      user.avatarUrl = reqUser.picture || reqUser.avatar;
+      const providerId = reqUser.id || reqUser.sub;
+      if (reqUser.provider === 'google') user.googleId = providerId;
+      if (reqUser.provider === 'microsoft') user.microsoftId = providerId;
+
       user = await this.userRepository.save(user);
     }
 

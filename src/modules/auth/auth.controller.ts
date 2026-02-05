@@ -1,6 +1,7 @@
-import { Controller, Get, UseGuards, Req, Res } from '@nestjs/common';
+import { Controller, Get, UseGuards, Req, Res, UseFilters } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
+import { AuthExceptionFilter } from './filters/auth-exception.filter';
 
 @Controller('auth')
 export class AuthController {
@@ -18,17 +19,19 @@ export class AuthController {
   async googleAuth(@Req() req) {}
 
   @Get('google/callback')
+  @UseFilters(new AuthExceptionFilter()) // 👈 THÊM DÒNG NÀY: Để bắt lỗi Forbidden và Redirect
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req, @Res() res) {
     // 2. Tạo Token từ User Info
-    const data = await this.authService.login(req.user);
+    // Gọi hàm login để lấy token
+    const result = await this.authService.login(req.user);
 
-    // 3. Redirect về Frontend
-    // - Sửa 'access_token' thành 'data.access_token'
-    // - Sửa đường dẫn về '/login' để khớp với Login.tsx
-    // - Thêm encodeURIComponent để không bị lỗi URL
+    // URL Frontend
+    const FRONTEND_URL = 'http://localhost:5173';
+
+    // Redirect về Frontend kèm Token
     return res.redirect(
-      `http://localhost:5173/login?accessToken=${data.access_token}&user=${encodeURIComponent(JSON.stringify(data.user))}`,
+      `${FRONTEND_URL}/login?accessToken=${result.access_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`
     );
   }
 
