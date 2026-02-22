@@ -12,6 +12,15 @@ import { AllowedDomain } from './database/entities/allowed-domain.entity';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DepartmentsModule } from './modules/departments/departments.module';
+// 👇 Import các Entity liên quan đến Performance
+import { EvaluationCycle } from './database/entities/performance/evaluation-cycle.entity';
+import { KpiCategory } from './database/entities/performance/kpi-category.entity';
+import { KpiTemplate } from './database/entities/performance/kpi-template.entity';
+import { UserKpi } from './database/entities/performance/user-kpi.entity';
+import { UserOkr } from './database/entities/performance/user-okr.entity';
+import { PerformanceModule } from './modules/performance/performance.module'; // 👈 Import
+//import Sytemlog
+import { SystemLogsModule } from './modules/system-logs/system-logs.module';
 
 @Module({
   imports: [
@@ -19,13 +28,26 @@ import { DepartmentsModule } from './modules/departments/departments.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [User, Role, Department, AllowedDomain],
+      autoLoadEntities: true,
+      entities: [
+        User,
+        Role,
+        Department,
+        AllowedDomain,
+        EvaluationCycle,
+        KpiCategory,
+        KpiTemplate,
+        UserKpi,
+        UserOkr,
+      ],
       synchronize: true, // LƯU Ý: Dev để true để nó tự tạo bảng, lên Prod phải tắt!
     }),
     AuthModule,
     AdminModule,
     UsersModule,
     DepartmentsModule,
+    PerformanceModule,
+    SystemLogsModule, // 👈 Đăng ký module Performance
   ],
   controllers: [AppController],
   providers: [AppService],

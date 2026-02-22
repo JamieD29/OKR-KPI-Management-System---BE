@@ -1,19 +1,21 @@
-import { Controller, Patch, Get, Post, Body, Delete, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req } from '@nestjs/common';
 import { DepartmentsService } from './departments.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Roles } from '../auth/decorators/role.decorator';
-import { RolesGuard } from '../auth/guards/role.guard';
 import { CreateDepartmentDto } from './dto/create-department.dto';
+import { UpdateDepartmentDto } from './dto/update-department.dto'; // 👈 Import DTO update
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/role.guard'; // Hoặc roles.guard tùy tên file mày
+import { Roles } from '../auth/decorators/role.decorator';
+import { RoleType } from '../../common/enums/role.enum'; // 👈 QUAN TRỌNG: Import Enum
 
 @Controller('departments')
-@UseGuards(JwtAuthGuard, RolesGuard) // 👈 Kích hoạt bảo vệ 2 lớp
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}
 
   @Post()
-  @Roles('SYSTEM_ADMIN') // 👈 Chỉ cho phép SYSTEM_ADMIN tạo bộ môn
-  create(@Body() createDepartmentDto: CreateDepartmentDto) {
-    return this.departmentsService.create(createDepartmentDto);
+  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN) // 👈 Dùng Enum cho chuẩn
+  create(@Body() createDepartmentDto: CreateDepartmentDto, @Req() req: any) {
+    return this.departmentsService.create(createDepartmentDto, req.user);
   }
 
   @Get()
@@ -21,15 +23,16 @@ export class DepartmentsController {
     return this.departmentsService.findAll();
   }
 
-  @Delete(':id')
-  @Roles('SYSTEM_ADMIN', 'SUPER_ADMIN') // 👈 Chỉ cho phép SYSTEM_ADMIN xóa bộ môn
-  remove(@Param('id') id: string) {
-    return this.departmentsService.remove(id);
+  @Patch(':id')
+  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
+  update(@Param('id') id: string, @Body() updateDepartmentDto: UpdateDepartmentDto) {
+    // ⚠️ Lần trước mày gọi nhầm remove() ở đây, giờ sửa lại thành update()
+    return this.departmentsService.update(id, updateDepartmentDto);
   }
 
-  @Patch(':id')
-  @Roles('SYSTEM_ADMIN') // 👈 Chỉ cho phép SYSTEM_ADMIN xóa bộ môn
-  update(@Param('id') id: string) {
+  @Delete(':id')
+  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
+  remove(@Param('id') id: string) {
     return this.departmentsService.remove(id);
   }
 }

@@ -2,9 +2,11 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not } from 'typeorm';
 import { Department } from '../../database/entities/department.entity';
-import { User } from '../../database/entities/user.entity'; // 👈 IMPORT THÊM CÁI NÀY
+import { User } from '../../database/entities/user.entity';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+
+import { SystemLogsService } from '../system-logs/system-logs.service'; // Import service
 
 @Injectable()
 export class DepartmentsService {
@@ -12,73 +14,86 @@ export class DepartmentsService {
     @InjectRepository(Department)
     private departmentRepository: Repository<Department>,
 
-    @InjectRepository(User) // 👈 INJECT THÊM CÁI NÀY ĐỂ SỬ DỤNG ĐƯỢC userRepository
+    @InjectRepository(User)
     private userRepository: Repository<User>,
+
+    private systemLogsService: SystemLogsService,
   ) {}
 
-  // 1. Tạo bộ môn mới
-  async create(createDepartmentDto: CreateDepartmentDto) {
-    // Check trùng tên
+  async create(createDepartmentDto: CreateDepartmentDto, currentUser: User) {
     const existing = await this.departmentRepository.findOne({
       where: { name: createDepartmentDto.name },
     });
     if (existing) throw new ConflictException('Tên bộ môn đã tồn tại');
 
     const dept = this.departmentRepository.create(createDepartmentDto);
-    return this.departmentRepository.save(dept);
+    // Lưu vào biến trước thay vì return luôn
+    const savedDept = await this.departmentRepository.save(dept);
+
+    // 👇 GỌI HÀM GHI LOG Ở ĐÂY
+    if (this.systemLogsService) {
+      await this.systemLogsService.createLog({
+        userId: currentUser?.id,
+        action: 'CREATE',
+        resource: 'DEPARTMENT',
+        message: `Tạo bộ môn mới: ${savedDept.name}`,
+        details: { new: savedDept },
+      });
+    }
+
+    return savedDept;
   }
 
-  // 2. Lấy tất cả (Kèm số lượng thành viên)
   findAll() {
     return this.departmentRepository
       .find({
         order: { name: 'ASC' },
-        relations: ['users'], // JOIN bảng users để đếm
+        relations: ['users'],
       })
       .then((depts) =>
         depts.map((d) => ({
           ...d,
-          memberCount: d.users ? d.users.length : 0, // Check null cho chắc
-          users: undefined, // Ẩn danh sách user cho nhẹ
+          memberCount: d.users ? d.users.length : 0,
+          users: undefined,
         })),
       );
   }
 
-  // 3. Update bộ môn
+  // 👇 Đã check lại logic update cho mày
   async update(id: string, updateDepartmentDto: UpdateDepartmentDto) {
+    // 1. Check xem bộ môn có tồn tại không
     const department = await this.departmentRepository.findOne({ where: { id } });
     if (!department) {
       throw new NotFoundException('Không tìm thấy bộ môn');
     }
 
-    // Check trùng mã code (nếu có sửa code)
-    if (updateDepartmentDto.code) {
+    // 2. Nếu sửa Code, phải check trùng code với thằng khác
+    if (updateDepartmentDto.code && updateDepartmentDto.code !== department.code) {
       const duplicate = await this.departmentRepository.findOne({
         where: {
           code: updateDepartmentDto.code,
-          id: Not(id),
+          id: Not(id), // ID khác ID hiện tại
         },
       });
 
       if (duplicate) {
-        throw new ConflictException('Mã bộ môn này đã được sử dụng bởi bộ môn khác');
+        throw new ConflictException('Mã bộ môn này đã được sử dụng');
       }
     }
 
+    // 3. Update an toàn
+    // Object.assign là OK, hoặc dùng this.departmentRepository.save({ ...department, ...dto })
     Object.assign(department, updateDepartmentDto);
     return this.departmentRepository.save(department);
   }
 
-  // 4. Xóa bộ môn (Đã Fix lỗi Foreign Key)
   async remove(id: string) {
     const dept = await this.departmentRepository.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('Không tìm thấy bộ môn');
 
-    // BƯỚC 1: Set department = null cho tất cả user đang thuộc bộ môn này
-    // Bây giờ 'this.userRepository' đã được inject nên chạy ngon lành
-    await this.userRepository.update({ department: { id: id } }, { department: null as any });
+    // Reset user về null trước khi xóa bộ môn
+    await this.userRepository.update({ department: { id } }, { department: null as any });
 
-    // BƯỚC 2: Xóa bộ môn
     return this.departmentRepository.remove(dept);
   }
 }

@@ -9,14 +9,12 @@ import { Repository, In } from 'typeorm';
 
 // 👇 Import Entities
 import { User } from '../../database/entities/user.entity';
-import { Role } from '../../database/entities/role.entity'; // Phải có cái này để tìm Role
+import { Role } from '../../database/entities/role.entity';
 import { Department } from '../../database/entities/department.entity';
 
 // 👇 Import DTOs
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateUserDto } from './dto/create-user.dto';
-
-// import { UpdateUserRolesDto } from './dto/update-user-roles.dto'; // Nếu dùng DTO riêng
 
 @Injectable()
 export class UsersService {
@@ -27,6 +25,11 @@ export class UsersService {
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
   ) {}
+
+  // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug (Để fix lỗi DEAN != dean, SYSTEM_ADMIN != system-admin)
+  private normalizeSlug(slug: string): string {
+    return slug.toLowerCase().replace(/_/g, '-');
+  }
 
   async create(createUserDto: CreateUserDto) {
     // 1. Check email trùng
@@ -44,14 +47,17 @@ export class UsersService {
 
     // 3. Xử lý Role (Tìm Entity từ Enum gửi lên)
     if (roles && roles.length > 0) {
+      // 👇 Chuẩn hóa slug trước khi tìm
+      const normalizedRoles = roles.map((r) => this.normalizeSlug(r));
+
       const roleEntities = await this.roleRepository.find({
-        where: { slug: In(roles) }, // Tìm các role có slug trùng khớp
+        where: { slug: In(normalizedRoles) },
       });
       newUser.roles = roleEntities;
     } else {
       // Nếu không gửi role -> Gán mặc định USER
       const defaultRole = await this.roleRepository.findOne({
-        where: { slug: 'USER' },
+        where: { slug: 'user' }, // db lưu là 'user' thường
       });
       if (defaultRole) newUser.roles = [defaultRole];
     }
@@ -69,9 +75,9 @@ export class UsersService {
   // ======================================================
   async findAll() {
     return this.userRepository.find({
-      relations: ['roles', 'department'], // 🔥 Quan trọng: Load role và bộ môn để hiện lên bảng
+      relations: ['roles', 'department'],
       order: {
-        createdAt: 'DESC', // User mới nhất lên đầu
+        createdAt: 'DESC',
       },
     });
   }
@@ -105,17 +111,12 @@ export class UsersService {
   // 5. UPDATE PROFILE (Cá nhân tự sửa)
   // ======================================================
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
-    const user = await this.findOne(userId); // Dùng lại hàm findOne cho gọn
+    const user = await this.findOne(userId);
 
-    // Tách departmentId ra xử lý riêng
     const { departmentId, ...rest } = updateProfileDto;
-
-    // Merge thông tin mới vào user
     Object.assign(user, rest);
 
-    // Xử lý quan hệ Bộ môn
     if (departmentId) {
-      // TypeORM shortcut: gán object { id } là nó tự hiểu quan hệ
       user.department = { id: departmentId } as Department;
     }
 
@@ -123,23 +124,30 @@ export class UsersService {
   }
 
   // ======================================================
-  // 6. UPDATE ROLES (Chức năng Admin Phân Quyền) 🔥 QUAN TRỌNG
+  // 6. UPDATE ROLES (Chức năng Admin Phân Quyền) 🔥 QUAN TRỌNG ĐÃ FIX
   // ======================================================
   async updateRoles(userId: string, roleSlugs: string[]) {
     const user = await this.findOne(userId);
 
-    // 1. Tìm các Role Entity dựa trên slug gửi lên (VD: ['SUPER_ADMIN'])
+    // 👇 1. Chuẩn hóa slug: DEAN -> dean, SYSTEM_ADMIN -> system-admin
+    const normalizedSlugs = roleSlugs.map((slug) => this.normalizeSlug(slug));
+
+    console.log(`🔍 Update Roles: ${roleSlugs} -> Normalized: ${normalizedSlugs}`); // Debug log
+
+    // 2. Tìm các Role Entity
     const roles = await this.roleRepository.find({
       where: {
-        slug: In(roleSlugs), // Tìm tất cả role có slug nằm trong mảng
+        slug: In(normalizedSlugs),
       },
     });
 
     if (!roles || roles.length === 0) {
-      throw new BadRequestException('Role không hợp lệ');
+      throw new BadRequestException(
+        `Role không hợp lệ hoặc không tìm thấy trong DB. (Input: ${roleSlugs})`,
+      );
     }
 
-    // 2. Gán lại mảng roles cho user
+    // 3. Gán lại mảng roles cho user
     user.roles = roles;
 
     return this.userRepository.save(user);

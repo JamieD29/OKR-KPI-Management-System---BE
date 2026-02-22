@@ -52,8 +52,11 @@ export class User {
   @Column({ unique: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   name: string;
+
+  // @Column({ name: 'full_name', nullable: true })
+  // fullName: string;
 
   @Column({ type: 'text', name: 'avatar_url', nullable: true })
   avatarUrl: string | null;
