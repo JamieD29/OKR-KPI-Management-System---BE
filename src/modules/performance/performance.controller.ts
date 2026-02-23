@@ -1,47 +1,60 @@
-import { Controller, Post, Get, Body, Query } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  Put,
+  Param,
+  UseGuards,
+  Req,
+  BadRequestException,
+} from '@nestjs/common';
 import { PerformanceService } from './performance.service';
-import { Put, Param } from '@nestjs/common';
-import { CreateUserKpiDto } from './dto/create-user-kpi.dto'; // Import DTO
+import { CreateUserKpiDto } from './dto/create-user-kpi.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // 👈 Đảm bảo đường dẫn này đúng tới file guard của mày
 
 @Controller('performance')
 export class PerformanceController {
   constructor(private readonly performanceService: PerformanceService) {}
 
-  // API này để chạy tool tạo dữ liệu mẫu (Chạy 1 lần là có data test ngay)
-  // POST: http://localhost:3000/performance/init
+  // API này để chạy tool tạo dữ liệu mẫu
   @Post('init')
   async initData() {
     return this.performanceService.initMockData();
   }
 
-  // API lấy template để hiển thị lên màn hình đánh giá
-  // GET: http://localhost:3000/performance/template
+  // 👇 ĐÃ SỬA: Lắp Guard và lấy ID từ Token, bắt lỗi chuẩn 400
   @Post('kpi/submit')
-  async submitKpi(@Body() body: any) {
-    console.log('📥 DỮ LIỆU NHẬN ĐƯỢC TỪ CLIENT:', body); // Debug xem gửi cái gì lên
+  @UseGuards(JwtAuthGuard)
+  async submitKpi(@Req() req: any, @Body() body: any) {
+    console.log('📥 DỮ LIỆU NHẬN ĐƯỢC TỪ CLIENT:', body);
 
-    // 1. Lấy userId
-    const userId = body.userId;
+    // 1. Lấy userId trực tiếp từ Token (Bảo mật tuyệt đối)
+    const userId = req.user?.id || req.user?.sub;
     if (!userId) {
-      throw new Error('❌ Thiếu userId trong body!');
+      throw new BadRequestException('❌ Không xác định được người dùng!');
     }
 
-    // 2. Lấy DTO (Chấp nhận cả 2 kiểu gửi: nằm trong 'data' hoặc nằm ngay bên ngoài)
-    // Nếu body.data có thì dùng, nếu không thì dùng chính body
+    // 2. Lấy DTO
     const dto = body.data || body;
-
-    // Check kỹ xem có cycleId chưa
     if (!dto.cycleId) {
-      throw new Error(`❌ Thiếu cycleId! (Nhận được: ${JSON.stringify(dto)})`);
+      throw new BadRequestException(`❌ Thiếu cycleId! (Nhận được: ${JSON.stringify(dto)})`);
     }
 
     return this.performanceService.submitKpi(userId, dto);
   }
 
+  // 👇 ĐÃ SỬA: NGUYÊN NHÂN GÂY KẸT LOGOUT ĐÃ ĐƯỢC FIX Ở ĐÂY
   @Get('kpi/my-kpi')
-  async getMyKpis(@Query('userId') userId: string, @Query('cycleId') cycleId: string) {
-    if (!userId || !cycleId) {
-      throw new Error('❌ Thiếu userId hoặc cycleId');
+  @UseGuards(JwtAuthGuard)
+  async getMyKpis(@Req() req: any, @Query('cycleId') cycleId: string) {
+    // Moi ID từ túi Token ra
+    const userId = req.user?.id || req.user?.sub;
+
+    if (!cycleId) {
+      // Dùng BadRequestException để ném lỗi 400 thay vì sập server 500
+      throw new BadRequestException('❌ Thiếu cycleId');
     }
     return this.performanceService.getMyKpis(userId, cycleId);
   }
@@ -51,20 +64,17 @@ export class PerformanceController {
     return this.performanceService.getKpiTemplate();
   }
 
-  // API lấy danh sách học kỳ
   @Get('cycles')
   async getCycles() {
     return this.performanceService.getCycles();
   }
 
-  // 1. API Lấy danh sách nhân viên đã nộp (Cho Manager xem)
   // GET /performance/manager/overview?cycleId=...
   @Get('manager/overview')
   async getDepartmentOverview(@Query('cycleId') cycleId: string) {
     return this.performanceService.getDepartmentOverview(cycleId);
   }
 
-  // 2. API Duyệt từng dòng KPI
   // POST /performance/manager/review
   @Post('manager/review')
   async reviewKpi(
@@ -78,7 +88,6 @@ export class PerformanceController {
     );
   }
 
-  // API Tạo kỳ mới
   @Post('admin/cycles')
   async createCycle(@Body() body: { name: string; startDate: string; endDate: string }) {
     return this.performanceService.createCycle(
@@ -88,12 +97,9 @@ export class PerformanceController {
     );
   }
 
-  // 👇 API Đóng/Mở kỳ đánh giá (Sửa lại để gọi Service thật)
   @Put('admin/cycles/:id/status')
   async toggleCycleStatus(@Param('id') id: string, @Body() body: { status: string }) {
     console.log(`📡 ADMIN ACTION: Đổi trạng thái kỳ ${id} sang ${body.status}`);
-
-    // Gọi sang Service để update Database
     return this.performanceService.toggleCycleStatus(id, body.status as any);
   }
 }

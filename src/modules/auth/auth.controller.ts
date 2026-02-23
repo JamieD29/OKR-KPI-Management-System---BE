@@ -1,11 +1,11 @@
-import { Controller, Get, UseGuards, Req, Res, UseFilters } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Req, Res, UseFilters } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { AuthExceptionFilter } from './filters/auth-exception.filter';
+import { JwtAuthGuard } from './guards/jwt-auth.guard'; // 👈 QUAN TRỌNG: Nhớ import JwtAuthGuard
 
 @Controller('auth')
 export class AuthController {
-  // 1. PHẢI CÓ CÁI NÀY ĐỂ GỌI SERVICE (Inject Dependency)
   constructor(private authService: AuthService) {}
 
   @Get('allowed-domains')
@@ -13,41 +13,46 @@ export class AuthController {
     return this.authService.getPublicDomains();
   }
 
-  // --- GOOGLE ---
+  // ==================== GOOGLE ====================
   @Get('google')
   @UseGuards(AuthGuard('google'))
   async googleAuth(@Req() req) {}
 
   @Get('google/callback')
-  @UseFilters(new AuthExceptionFilter()) // 👈 THÊM DÒNG NÀY: Để bắt lỗi Forbidden và Redirect
+  @UseFilters(new AuthExceptionFilter())
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req, @Res() res) {
-    // 2. Tạo Token từ User Info
-    // Gọi hàm login để lấy token
     const result = await this.authService.login(req.user);
-
-    // URL Frontend
     const FRONTEND_URL = 'http://localhost:5173';
 
-    // Redirect về Frontend kèm Token
     return res.redirect(
-      `${FRONTEND_URL}/login?accessToken=${result.access_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`
+      `${FRONTEND_URL}/login?accessToken=${result.access_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`,
     );
   }
 
-  // --- MICROSOFT ---
+  // ==================== MICROSOFT ====================
   @Get('microsoft')
   @UseGuards(AuthGuard('microsoft'))
   async microsoftAuth(@Req() req) {}
 
   @Get('microsoft/callback')
+  @UseFilters(new AuthExceptionFilter()) // 👈 Thêm filter bắt lỗi cho Microsoft luôn
   @UseGuards(AuthGuard('microsoft'))
   async microsoftAuthRedirect(@Req() req, @Res() res) {
-    // Microsoft cũng phải login qua AuthService để lấy JWT chuẩn
     const data = await this.authService.login(req.user);
+    const FRONTEND_URL = 'http://localhost:5173';
 
     return res.redirect(
-      `http://localhost:5173/login?accessToken=${data.access_token}&user=${encodeURIComponent(JSON.stringify(req.user))}`,
+      // 👈 Sửa lại JSON.stringify(data.user) để Frontend nhận đúng format
+      `${FRONTEND_URL}/login?accessToken=${data.access_token}&user=${encodeURIComponent(JSON.stringify(data.user))}`,
     );
+  }
+
+  // ==================== LOGOUT ====================
+  // 👈 THÊM API LOGOUT ĐỂ GHI LOG
+  @Post('logout')
+  @UseGuards(JwtAuthGuard) // Chỉ cho phép user đang đăng nhập mới gọi được
+  async logout(@Req() req) {
+    return this.authService.logout(req.user);
   }
 }

@@ -25,14 +25,18 @@ export class DepartmentsController {
 
   @Patch(':id')
   @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
-  update(@Param('id') id: string, @Body() updateDepartmentDto: UpdateDepartmentDto) {
+  update(
+    @Param('id') id: string,
+    @Body() updateDepartmentDto: UpdateDepartmentDto,
+    @Req() req: any,
+  ) {
     // ⚠️ Lần trước mày gọi nhầm remove() ở đây, giờ sửa lại thành update()
-    return this.departmentsService.update(id, updateDepartmentDto);
+    return this.departmentsService.update(id, updateDepartmentDto, req.user);
   }
 
   @Delete(':id')
   @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
-  remove(@Param('id') id: string) {
-    return this.departmentsService.remove(id);
+  remove(@Param('id') id: string, @Req() req: any) {
+    return this.departmentsService.remove(id, req.user);
   }
 }
