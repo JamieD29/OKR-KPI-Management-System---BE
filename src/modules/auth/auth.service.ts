@@ -1,4 +1,5 @@
 import { Injectable, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
+import { SystemLogsService } from '../system-logs/system-logs.service';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,14 +14,11 @@ export class AuthService {
     @InjectRepository(AllowedDomain) private domainRepository: Repository<AllowedDomain>,
     @InjectRepository(Role) private roleRepository: Repository<Role>,
     private jwtService: JwtService,
+    private systemLogsService: SystemLogsService, // 👈 Đã Inject SystemLogsService
   ) {}
 
-  // Trong class AuthService
   async getPublicDomains() {
-    // Lấy list domain từ DB trả về cho Frontend hiển thị chơi thôi
-    const domains = await this.domainRepository.find({
-      select: ['domain'], // Chỉ lấy tên domain, không cần lấy ID hay ngày tạo
-    });
+    const domains = await this.domainRepository.find({ select: ['domain'] });
     return { domains };
   }
 
@@ -29,48 +27,42 @@ export class AuthService {
     const email = reqUser.email;
     if (!email) throw new InternalServerErrorException('Email not found from provider');
 
-    // 1. Lấy thông tin User (nếu có)
     let user = await this.userRepository.findOne({
       where: { email },
       relations: ['roles'],
     });
 
-    // ---------------------------------------------------------
-    // 🔥 SỬA LẠI: CHECK DOMAIN CHO TẤT CẢ (CŨ + MỚI)
-    // ---------------------------------------------------------
-
-    // Đếm user để biết có phải hệ thống mới tinh không
     const userCount = await this.userRepository.count();
     const isFirstUser = userCount === 0;
-
-    // Kiểm tra user hiện tại có phải Admin không (để tránh lock nhầm Admin)
-    // Nếu user chưa tồn tại (người mới) thì mặc định isAdmin = false
     const isAdmin = user?.roles?.some((r) => r.slug === 'SYSTEM_ADMIN') || false;
 
-    // Lấy domain từ email
     const domain = email.split('@')[1];
     const isDomainAllowed = await this.domainRepository.findOne({ where: { domain } });
 
-    // LOGIC CHẶN:
-    // Nếu KHÔNG phải user đầu tiên (First User)
-    // VÀ KHÔNG phải là Admin (nếu là user cũ)
-    // VÀ Domain không nằm trong Whitelist
-    // -> THÌ CHẶN LUÔN
+    // ⛔ LOGIC CHẶN (GHI LOG THẤT BẠI Ở ĐÂY)
     if (!isFirstUser && !isAdmin) {
       if (!isDomainAllowed) {
         console.warn(`⛔ Blocked login attempt: ${email} (Domain not allowed)`);
-        throw new ForbiddenException('DOMAIN_NOT_ALLOWED'); // Message này FE sẽ bắt để hiện trang 404
+
+        // 📸 GHI LOG: ĐĂNG NHẬP THẤT BẠI (Do sai Domain)
+        if (this.systemLogsService) {
+          await this.systemLogsService.createLog({
+            userId: (user?.id as any) || null, // Nếu user chưa tồn tại thì để null
+            action: 'LOGIN',
+            resource: 'AUTH',
+            message: `Đăng nhập thất bại: Tên miền @${domain} bị chặn`,
+            details: { email, provider: reqUser.provider, error: 'DOMAIN_NOT_ALLOWED' },
+            status: 'FAILED' as any,
+          });
+        }
+
+        throw new ForbiddenException('DOMAIN_NOT_ALLOWED');
       }
     }
 
-    // ---------------------------------------------------------
-    // SAU KHI CHECK XONG MỚI ĐẾN ĐOẠN TẠO HOẶC UPDATE
-    // ---------------------------------------------------------
-
-    // 2. Nếu chưa có User -> Tạo mới
+    // Tạo mới hoặc Cập nhật User...
     if (!user) {
-      // Logic xác định Role cho người mới
-      const roleSlug = isFirstUser ? 'SYSTEM_ADMIN' : 'USER'; // Sửa LECTURER -> USER theo DB mới
+      const roleSlug = isFirstUser ? 'SYSTEM_ADMIN' : 'USER';
       const roleName = isFirstUser ? 'System Admin' : 'User';
 
       let role = await this.roleRepository.findOne({ where: { slug: roleSlug } });
@@ -82,7 +74,6 @@ export class AuthService {
         });
       }
 
-      // Tạo user
       const newUser = this.userRepository.create({
         email,
         name: reqUser.firstName ? `${reqUser.firstName} ${reqUser.lastName}` : reqUser.name,
@@ -96,7 +87,6 @@ export class AuthService {
       user = await this.userRepository.save(newUser);
       console.log(`✅ Created New User: ${email}`);
     } else {
-      // 3. User cũ -> Cập nhật info
       user.avatarUrl = reqUser.picture || reqUser.avatar;
       const providerId = reqUser.id || reqUser.sub;
       if (reqUser.provider === 'google') user.googleId = providerId;
@@ -105,14 +95,15 @@ export class AuthService {
       user = await this.userRepository.save(user);
     }
 
+    // Gắn thêm thông tin provider vào user để hàm login bên dưới có cái để log
+    user['loginProvider'] = reqUser.provider;
+
     return user;
   }
 
   // Hàm này được gọi bởi AuthController để tạo Token
   async login(user: any) {
-    // Đảm bảo roles luôn là mảng
     const userRoles = user.roles || [];
-
     const payload = {
       sub: user.id,
       email: user.email,
@@ -121,6 +112,18 @@ export class AuthService {
       picture: user.avatarUrl,
     };
 
+    // 📸 GHI LOG: ĐĂNG NHẬP THÀNH CÔNG
+    if (this.systemLogsService) {
+      await this.systemLogsService.createLog({
+        userId: user.id,
+        action: 'LOGIN',
+        resource: 'AUTH',
+        message: `Đăng nhập thành công vào hệ thống`,
+        details: { method: `SSO (${user.loginProvider || 'Google/Microsoft'})`, email: user.email },
+        status: 'SUCCESS' as any,
+      });
+    }
+
     return {
       access_token: this.jwtService.sign(payload),
       user: {
@@ -128,8 +131,25 @@ export class AuthService {
         name: user.name,
         email: user.email,
         avatar: user.avatarUrl,
-        roles: userRoles.map((r) => r.slug), // Trả về slug role cho Frontend dùng
+        roles: userRoles.map((r) => r.slug),
       },
     };
+  }
+
+  // 📸 HÀM MỚI: XỬ LÝ ĐĂNG XUẤT ĐỂ GHI LOG
+  async logout(user: any) {
+    if (this.systemLogsService && user) {
+      // Vì payload JWT của mày dùng 'sub' làm ID, nên user từ token sẽ có sub hoặc id
+      const userId = user.id || user.sub;
+
+      await this.systemLogsService.createLog({
+        userId: userId,
+        action: 'LOGOUT',
+        resource: 'AUTH',
+        message: `Đã đăng xuất khỏi hệ thống`,
+        status: 'SUCCESS' as any,
+      });
+    }
+    return { message: 'Đăng xuất thành công' };
   }
 }

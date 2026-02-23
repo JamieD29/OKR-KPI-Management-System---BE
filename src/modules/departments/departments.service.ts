@@ -60,19 +60,19 @@ export class DepartmentsService {
   }
 
   // 👇 Đã check lại logic update cho mày
-  async update(id: string, updateDepartmentDto: UpdateDepartmentDto) {
+  async update(id: string, updateDepartmentDto: UpdateDepartmentDto, currentUser: any) {
     // 1. Check xem bộ môn có tồn tại không
     const department = await this.departmentRepository.findOne({ where: { id } });
     if (!department) {
       throw new NotFoundException('Không tìm thấy bộ môn');
     }
 
-    // 2. Nếu sửa Code, phải check trùng code với thằng khác
+    // phải check trùng code với thằng khác
     if (updateDepartmentDto.code && updateDepartmentDto.code !== department.code) {
       const duplicate = await this.departmentRepository.findOne({
         where: {
           code: updateDepartmentDto.code,
-          id: Not(id), // ID khác ID hiện tại
+          id: Not(id),
         },
       });
 
@@ -81,19 +81,41 @@ export class DepartmentsService {
       }
     }
 
+    const oldData = { ...department };
     // 3. Update an toàn
     // Object.assign là OK, hoặc dùng this.departmentRepository.save({ ...department, ...dto })
     Object.assign(department, updateDepartmentDto);
-    return this.departmentRepository.save(department);
+    const updatedDept = await this.departmentRepository.save(department);
+    if (this.systemLogsService) {
+      await this.systemLogsService.createLog({
+        userId: currentUser?.id,
+        action: 'UPDATE', // Hành động: UPDATE
+        resource: 'DEPARTMENT',
+        message: `Cập nhật thông tin bộ môn: ${updatedDept.code}`,
+        details: { old: oldData, new: updatedDept }, // 👈 Rất quan trọng
+      });
+    }
+
+    return updatedDept;
   }
 
-  async remove(id: string) {
+  async remove(id: string, currentUser: any) {
     const dept = await this.departmentRepository.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('Không tìm thấy bộ môn');
-
+    const deletedData = { ...dept };
     // Reset user về null trước khi xóa bộ môn
     await this.userRepository.update({ department: { id } }, { department: null as any });
+    const result = await this.departmentRepository.remove(dept);
 
-    return this.departmentRepository.remove(dept);
+    if (this.systemLogsService) {
+      await this.systemLogsService.createLog({
+        userId: currentUser?.id,
+        action: 'DELETE', // Hành động: DELETE (Màu đỏ trên UI)
+        resource: 'DEPARTMENT',
+        message: `Đã xóa bộ môn: ${deletedData.name} (${deletedData.code})`,
+        details: { deleted: deletedData }, // Lưu lại để sau này biết đã xóa cái gì
+      });
+    }
+    return result;
   }
 }
