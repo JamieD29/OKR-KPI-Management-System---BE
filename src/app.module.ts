@@ -21,7 +21,7 @@ import { UserOkr } from './database/entities/performance/user-okr.entity';
 import { PerformanceModule } from './modules/performance/performance.module'; // 👈 Import
 //import Sytemlog
 import { SystemLogsModule } from './modules/system-logs/system-logs.module';
-
+import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Load file .env
@@ -47,7 +47,8 @@ import { SystemLogsModule } from './modules/system-logs/system-logs.module';
     UsersModule,
     DepartmentsModule,
     PerformanceModule,
-    SystemLogsModule, // 👈 Đăng ký module Performance
+    SystemLogsModule,
+    OkrModule, // 👈 Đăng ký module Performance
   ],
   controllers: [AppController],
   providers: [AppService],
