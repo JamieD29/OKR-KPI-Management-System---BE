@@ -24,7 +24,7 @@ export class UsersService {
 
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
-  ) {}
+  ) { }
 
   // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug (Để fix lỗi DEAN != dean, SYSTEM_ADMIN != system-admin)
   private normalizeSlug(slug: string): string {
@@ -73,8 +73,13 @@ export class UsersService {
   // ======================================================
   // 2. FIND ALL: Lấy danh sách (Cho Admin Portal)
   // ======================================================
-  async findAll() {
+  async findAll(departmentId?: string) {
+    const where: any = {};
+    if (departmentId) {
+      where.department = { id: departmentId };
+    }
     return this.userRepository.find({
+      where,
       relations: ['roles', 'department'],
       order: {
         createdAt: 'DESC',

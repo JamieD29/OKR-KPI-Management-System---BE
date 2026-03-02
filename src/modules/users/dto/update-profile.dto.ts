@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber, IsOptional, IsString, IsDateString, Min, IsUUID } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsDateString, Min, IsUUID } from 'class-validator';
 // 👇 SỬA LẠI ĐƯỜNG DẪN IMPORT NÀY CHO ĐÚNG CẤU TRÚC
 import { AcademicRank, Degree, JobTitle, Gender } from '../../../database/entities/user.entity';
 
@@ -52,4 +52,8 @@ export class UpdateProfileDto {
   @IsString()
   // @Matches(/^[A-Z0-9]+$/, { message: 'Mã cán bộ chỉ chứa chữ hoa và số' }) // Bật nếu muốn validate cứng
   staffCode?: string;
+
+  @IsOptional()
+  @IsBoolean({ message: 'profileCompleted phải là boolean' })
+  profileCompleted?: boolean;
 }

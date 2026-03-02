@@ -33,9 +33,12 @@ export enum JobTitle {
   HEAD_DEPT = 'Trưởng bộ môn',
   LECTURER = 'Giảng viên',
   SENIOR_LECTURER = 'Giảng viên chính',
-  ASSISTANT = 'Trợ giảng', // Trợ giảng
+  ASSISTANT = 'Trợ giảng',
+  SPECIALIST = 'Chuyên viên',
   STAFF = 'Giáo vụ',
   RESEARCHER = 'Nghiên cứu viên',
+  TECHNICIAN = 'Kỹ thuật viên',
+  SUPPORT_STAFF = 'Nhân viên hỗ trợ',
 }
 
 export enum Gender {
@@ -129,6 +132,10 @@ export class User {
     nullable: true, // Để true vì lúc mới tạo bằng Google chưa có mã này
   })
   staffCode: string;
+
+  // Đánh dấu user đã hoàn tất thiết lập hồ sơ lần đầu
+  @Column({ default: false, name: 'profile_completed' })
+  profileCompleted: boolean;
 
   // --- 👆 HẾT PHẦN THÊM MỚI ---
 
