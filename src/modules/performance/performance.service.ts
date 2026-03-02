@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -137,45 +142,70 @@ export class PerformanceService {
   // ==========================================
   // 4. GỬI ĐÁNH GIÁ KPI (USER SUBMIT)
   // ==========================================
+  // ==========================================
+  // 4. GỬI ĐÁNH GIÁ KPI (USER SUBMIT)
+  // ==========================================
   async submitKpi(userId: string, dto: CreateUserKpiDto) {
     const { cycleId, items } = dto;
+
+    // 🛡️ 1. Lập chốt kiểm tra dữ liệu đầu vào (Tránh frontend gửi bậy làm sập server)
+    if (!cycleId || !items || !Array.isArray(items)) {
+      // Nhớ import BadRequestException ở đầu file nhé!
+      throw new BadRequestException('❌ Dữ liệu không hợp lệ (Thiếu cycleId hoặc items)');
+    }
+
+    // 🧹 2. DỌN RÁC (CHỐNG LỖI NHÂN BẢN DỮ LIỆU)
+    // Tìm tất cả KPI cũ của ông User này trong đúng Học kỳ này
+    const existingKpis = await this.userKpiRepo.find({
+      where: { userId: userId, cycleId: cycleId },
+    });
+
+    // Nếu có dữ liệu cũ -> Xóa sạch trước khi nộp bản mới
+    if (existingKpis.length > 0) {
+      await this.userKpiRepo.remove(existingKpis);
+      console.log(`🧹 Đã xóa ${existingKpis.length} dòng bản nháp cũ của user ${userId}`);
+    }
+
     const result: UserKpi[] = [];
 
+    // ⚙️ 3. Xử lý và tính điểm cho từng item
     for (const item of items) {
       let calculatedScore = 0;
 
-      // 1. Nếu là mục từ Template (Mục cứng) -> Lấy điểm gốc để tính
+      // Nếu là mục từ Template (Mục cứng) -> Lấy điểm gốc để tính
       if (item.templateId) {
         const template = await this.templateRepo.findOne({ where: { id: item.templateId } });
         if (template) {
-          // Công thức: Số lượng * Điểm cơ sở
-          calculatedScore = item.quantity * template.basePoint;
+          // Ép kiểu ép số lượng (Lỡ frontend gửi null/undefined thì quy về 0)
+          const qty = Number(item.quantity) || 0;
+          calculatedScore = qty * template.basePoint;
         }
-      } else {
-        // 2. Nếu là mục tự thêm (Add-more) -> Tạm thời để 0 hoặc user tự nhập (ở đây tao để logic đơn giản là 0 chờ duyệt)
-        calculatedScore = 0;
       }
 
-      // 3. Tạo Entity
+      // 4. Tạo Entity dòng mới
       const newKpi = this.userKpiRepo.create({
-        userId,
-        cycleId,
+        userId: userId,
+        cycleId: cycleId,
         categoryId: item.categoryId,
-        templateId: item.templateId ? item.templateId : undefined,
+        // Use undefined instead of null for optional fields
+        templateId: item.templateId || undefined,
         content: item.content,
-        quantity: item.quantity,
-        selfScore: calculatedScore, // Điểm hệ thống tự tính
-        evidenceUrl: item.evidenceUrl,
-        managerScore: calculatedScore, // Mặc định điểm sếp = điểm tự chấm (sẽ sửa sau khi duyệt)
+        quantity: Number(item.quantity) || 0,
+        selfScore: calculatedScore,
+        evidenceUrl: item.evidenceUrl || undefined,
+        managerScore: calculatedScore, // Sếp chưa chấm thì mặc định bằng tự chấm
       });
 
       result.push(newKpi);
     }
 
-    // 4. Lưu tất cả vào DB (Dùng save mảng cho nhanh)
+    // 5. Lưu toàn bộ mảng mới vào DB
     await this.userKpiRepo.save(result);
 
-    return { message: 'Đã lưu đánh giá thành công!', count: result.length };
+    return {
+      message: '✅ Đã lưu đánh giá thành công!',
+      count: result.length,
+    };
   }
 
   // ==========================================

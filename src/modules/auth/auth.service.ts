@@ -15,7 +15,7 @@ export class AuthService {
     @InjectRepository(Role) private roleRepository: Repository<Role>,
     private jwtService: JwtService,
     private systemLogsService: SystemLogsService, // 👈 Đã Inject SystemLogsService
-  ) {}
+  ) { }
 
   async getPublicDomains() {
     const domains = await this.domainRepository.find({ select: ['domain'] });
@@ -103,7 +103,13 @@ export class AuthService {
 
   // Hàm này được gọi bởi AuthController để tạo Token
   async login(user: any) {
-    const userRoles = user.roles || [];
+    // Reload user with department relation (validateOAuthLogin chỉ load roles)
+    const fullUser = await this.userRepository.findOne({
+      where: { id: user.id },
+      relations: ['roles', 'department'],
+    });
+
+    const userRoles = fullUser?.roles || user.roles || [];
     const payload = {
       sub: user.id,
       email: user.email,
@@ -132,6 +138,12 @@ export class AuthService {
         email: user.email,
         avatar: user.avatarUrl,
         roles: userRoles.map((r) => r.slug),
+        // 🔥 Thêm các field để FE kiểm tra profile đã hoàn tất chưa
+        jobTitle: fullUser?.jobTitle || null,
+        profileCompleted: fullUser?.profileCompleted || false,
+        department: fullUser?.department
+          ? { id: fullUser.department.id, name: fullUser.department.name }
+          : null,
       },
     };
   }

@@ -8,7 +8,7 @@ export class SystemLogsService {
   constructor(
     @InjectRepository(SystemLog)
     private readonly logRepository: Repository<SystemLog>,
-  ) {}
+  ) { }
 
   // 1. Hàm để các service khác gọi khi muốn ghi log
   async createLog(data: {
@@ -36,5 +36,10 @@ export class SystemLogsService {
       relations: ['user'], // Lấy thông tin người làm
       order: { createdAt: 'DESC' }, // Mới nhất lên đầu
     });
+  }
+
+  // 3. Xóa toàn bộ nhật ký (Giải phóng bộ nhớ)
+  async clearAll() {
+    await this.logRepository.clear();
   }
 }

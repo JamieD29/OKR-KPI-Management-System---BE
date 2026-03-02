@@ -5,6 +5,7 @@ import {
   Patch,
   Param, // 👈 Thêm cái này để lấy ID từ URL
   Put, // 👈 Thêm cái này để tạo method PUT
+  Query, // 👈 Thêm để nhận query params (departmentId)
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -21,7 +22,7 @@ import { RoleType } from '../../common/enums/role.enum';
 // 👇 Thêm RolesGuard vào đây để nó check quyền cho các hàm bên dưới
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   @Get('profile')
   getProfile(@Req() req) {
@@ -37,11 +38,11 @@ export class UsersController {
   // 👇 CÁC API DÀNH CHO ADMIN PORTAL
   // ==========================================
 
-  // 1. Lấy danh sách user (Mày đã có, tao bổ sung import cho nó chạy)
+  // 1. Lấy danh sách user — hỗ trợ filter theo departmentId
   @Get()
   @Roles(RoleType.SUPER_ADMIN)
-  async findAll() {
-    return this.usersService.findAll();
+  async findAll(@Query('departmentId') departmentId?: string) {
+    return this.usersService.findAll(departmentId);
   }
 
   // 2. Cập nhật quyền User (Cái nút SAVE gọi vào đây này) 🔥 QUAN TRỌNG
