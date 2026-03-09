@@ -11,6 +11,10 @@ import { Repository, In } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
 import { Role } from '../../database/entities/role.entity';
 import { Department } from '../../database/entities/department.entity';
+import { ManagementPosition } from '../../database/entities/management-position.entity';
+
+// 👇 Import Notification Service
+import { NotificationService } from '../notification/notification.service';
 
 // 👇 Import DTOs
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -24,11 +28,16 @@ export class UsersService {
 
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
+
+    @InjectRepository(ManagementPosition)
+    private positionRepository: Repository<ManagementPosition>,
+
+    private notificationService: NotificationService,
   ) { }
 
-  // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug (Để fix lỗi DEAN != dean, SYSTEM_ADMIN != system-admin)
+  // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug
   private normalizeSlug(slug: string): string {
-    return slug.toLowerCase().replace(/_/g, '-');
+    return slug.toUpperCase();
   }
 
   async create(createUserDto: CreateUserDto) {
@@ -57,7 +66,7 @@ export class UsersService {
     } else {
       // Nếu không gửi role -> Gán mặc định USER
       const defaultRole = await this.roleRepository.findOne({
-        where: { slug: 'user' }, // db lưu là 'user' thường
+        where: { slug: 'USER' }, // db lưu là 'USER' in hoa
       });
       if (defaultRole) newUser.roles = [defaultRole];
     }
@@ -134,7 +143,7 @@ export class UsersService {
   async updateRoles(userId: string, roleSlugs: string[]) {
     const user = await this.findOne(userId);
 
-    // 👇 1. Chuẩn hóa slug: DEAN -> dean, SYSTEM_ADMIN -> system-admin
+    // 👇 1. Chuẩn hóa slug
     const normalizedSlugs = roleSlugs.map((slug) => this.normalizeSlug(slug));
 
     console.log(`🔍 Update Roles: ${roleSlugs} -> Normalized: ${normalizedSlugs}`); // Debug log
@@ -159,7 +168,43 @@ export class UsersService {
   }
 
   // ======================================================
-  // 7. REMOVE: Xóa User
+  // 7. ASSIGN MANAGEMENT POSITION: Gán chức vụ quản lý
+  // ======================================================
+  async assignManagementPosition(userId: string, positionId: string | null) {
+    const user = await this.findOne(userId);
+
+    if (positionId) {
+      // Gán chức vụ mới
+      const position = await this.positionRepository.findOne({ where: { id: positionId } });
+      if (!position) {
+        throw new NotFoundException(`Chức vụ với ID "${positionId}" không tồn tại`);
+      }
+      user.managementPosition = position;
+
+      // Tạo thông báo cho user
+      await this.notificationService.create(
+        userId,
+        `Bạn đã được gán chức vụ quản lý: ${position.name}`,
+      );
+    } else {
+      // Gỡ chức vụ
+      if (user.managementPosition) {
+        const oldPositionName = user.managementPosition.name;
+        user.managementPosition = null as any;
+
+        // Thông báo gỡ chức vụ
+        await this.notificationService.create(
+          userId,
+          `Chức vụ quản lý "${oldPositionName}" của bạn đã được gỡ bỏ`,
+        );
+      }
+    }
+
+    return this.userRepository.save(user);
+  }
+
+  // ======================================================
+  // 8. REMOVE: Xóa User
   // ======================================================
   async remove(id: string) {
     const user = await this.findOne(id);

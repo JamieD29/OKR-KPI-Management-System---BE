@@ -32,7 +32,7 @@ export class PerformanceService {
 
     @InjectRepository(UserKpi)
     private userKpiRepo: Repository<UserKpi>,
-  ) {}
+  ) { }
 
   async initMockData() {
     try {
@@ -69,7 +69,7 @@ export class PerformanceService {
         catA = await this.categoryRepo.save({
           name: 'Nhiệm vụ giảng dạy',
           code: codeA,
-          maxPointsByRole: { LECTURER: 10, DEAN: 10 },
+          maxPointsByRole: { USER: 10, ADMIN: 10 },
         });
 
         // 👇 KHẮC PHỤC LỖI Ở ĐÂY: Thêm categoryId: catA.id
@@ -102,7 +102,7 @@ export class PerformanceService {
         catB = await this.categoryRepo.save({
           name: 'Nhiệm vụ Nghiên cứu khoa học',
           code: codeB,
-          maxPointsByRole: { LECTURER: 10, DEAN: 10 },
+          maxPointsByRole: { USER: 10, ADMIN: 10 },
         });
 
         // 👇 KHẮC PHỤC LỖI Ở ĐÂY: Thêm categoryId: catB.id

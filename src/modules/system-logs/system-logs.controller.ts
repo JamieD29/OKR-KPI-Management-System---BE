@@ -12,14 +12,14 @@ export class SystemLogsController {
 
   // Chỉ Admin mới được xem Log
   @Get()
-  @Roles(RoleType.SUPER_ADMIN, RoleType.SYSTEM_ADMIN)
+  @Roles(RoleType.ADMIN)
   findAll() {
     return this.systemLogsService.findAll();
   }
 
-  // Xóa toàn bộ nhật ký — chỉ SUPER_ADMIN
+  // Xóa toàn bộ nhật ký — chỉ ADMIN
   @Delete()
-  @Roles(RoleType.SUPER_ADMIN)
+  @Roles(RoleType.ADMIN)
   async clearAll() {
     await this.systemLogsService.clearAll();
     return { message: 'Đã xóa toàn bộ nhật ký hệ thống.' };

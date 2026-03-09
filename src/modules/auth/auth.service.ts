@@ -34,7 +34,7 @@ export class AuthService {
 
     const userCount = await this.userRepository.count();
     const isFirstUser = userCount === 0;
-    const isAdmin = user?.roles?.some((r) => r.slug === 'SYSTEM_ADMIN') || false;
+    const isAdmin = user?.roles?.some((r) => r.slug === 'ADMIN') || false;
 
     const domain = email.split('@')[1];
     const isDomainAllowed = await this.domainRepository.findOne({ where: { domain } });
@@ -47,7 +47,7 @@ export class AuthService {
         // 📸 GHI LOG: ĐĂNG NHẬP THẤT BẠI (Do sai Domain)
         if (this.systemLogsService) {
           await this.systemLogsService.createLog({
-            userId: (user?.id as any) || null, // Nếu user chưa tồn tại thì để null
+            userId: user?.id ?? undefined, // Nếu user chưa tồn tại thì để undefined → ghi log không gắn user
             action: 'LOGIN',
             resource: 'AUTH',
             message: `Đăng nhập thất bại: Tên miền @${domain} bị chặn`,
@@ -62,8 +62,8 @@ export class AuthService {
 
     // Tạo mới hoặc Cập nhật User...
     if (!user) {
-      const roleSlug = isFirstUser ? 'SYSTEM_ADMIN' : 'USER';
-      const roleName = isFirstUser ? 'System Admin' : 'User';
+      const roleSlug = isFirstUser ? 'ADMIN' : 'USER';
+      const roleName = isFirstUser ? 'Admin' : 'User';
 
       let role = await this.roleRepository.findOne({ where: { slug: roleSlug } });
       if (!role) {

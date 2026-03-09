@@ -22,6 +22,14 @@ import { PerformanceModule } from './modules/performance/performance.module'; //
 //import Sytemlog
 import { SystemLogsModule } from './modules/system-logs/system-logs.module';
 import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
+// 👇 Import Database Seeder để tự động seed data khi khởi động
+import { DatabaseSeederService } from './database/database-seeder.service';
+// 👇 Import Management Position & Notification
+import { ManagementPosition } from './database/entities/management-position.entity';
+import { Notification } from './database/entities/notification.entity';
+import { ManagementPositionModule } from './modules/management-position/management-position.module';
+import { NotificationModule } from './modules/notification/notification.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), // Load file .env
@@ -39,9 +47,13 @@ import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
         KpiTemplate,
         UserKpi,
         UserOkr,
+        ManagementPosition,
+        Notification,
       ],
       synchronize: true, // LƯU Ý: Dev để true để nó tự tạo bảng, lên Prod phải tắt!
     }),
+    // 👇 Đăng ký Entity cho Seeder sử dụng
+    TypeOrmModule.forFeature([AllowedDomain, Role]),
     AuthModule,
     AdminModule,
     UsersModule,
@@ -49,8 +61,10 @@ import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
     PerformanceModule,
     SystemLogsModule,
     OkrModule, // 👈 Đăng ký module Performance
+    ManagementPositionModule,
+    NotificationModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, DatabaseSeederService], // 👈 Thêm Seeder vào providers
 })
-export class AppModule {}
+export class AppModule { }
