@@ -40,15 +40,25 @@ export class UsersController {
 
   // 1. Lấy danh sách user — hỗ trợ filter theo departmentId
   @Get()
-  @Roles(RoleType.SUPER_ADMIN)
+  @Roles(RoleType.ADMIN)
   async findAll(@Query('departmentId') departmentId?: string) {
     return this.usersService.findAll(departmentId);
   }
 
   // 2. Cập nhật quyền User (Cái nút SAVE gọi vào đây này) 🔥 QUAN TRỌNG
   @Put(':id/roles')
-  @Roles(RoleType.SUPER_ADMIN) // Chỉ Trùm Cuối mới được đổi quyền
+  @Roles(RoleType.ADMIN) // Chỉ Trùm Cuối mới được đổi quyền
   async updateUserRoles(@Param('id') userId: string, @Body() body: { roles: RoleType[] }) {
     return this.usersService.updateRoles(userId, body.roles);
+  }
+
+  // 3. Gán chức vụ quản lý cho User (Admin only)
+  @Put(':id/management-position')
+  @Roles(RoleType.ADMIN)
+  async assignManagementPosition(
+    @Param('id') userId: string,
+    @Body() body: { positionId: string | null },
+  ) {
+    return this.usersService.assignManagementPosition(userId, body.positionId);
   }
 }

@@ -10,10 +10,10 @@ import { RoleType } from '../../common/enums/role.enum'; // 👈 QUAN TRỌNG: I
 @Controller('departments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DepartmentsController {
-  constructor(private readonly departmentsService: DepartmentsService) {}
+  constructor(private readonly departmentsService: DepartmentsService) { }
 
   @Post()
-  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN) // 👈 Dùng Enum cho chuẩn
+  @Roles(RoleType.ADMIN) // 👈 Dùng Enum cho chuẩn
   create(@Body() createDepartmentDto: CreateDepartmentDto, @Req() req: any) {
     return this.departmentsService.create(createDepartmentDto, req.user);
   }
@@ -24,7 +24,7 @@ export class DepartmentsController {
   }
 
   @Patch(':id')
-  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
+  @Roles(RoleType.ADMIN)
   update(
     @Param('id') id: string,
     @Body() updateDepartmentDto: UpdateDepartmentDto,
@@ -35,7 +35,7 @@ export class DepartmentsController {
   }
 
   @Delete(':id')
-  @Roles(RoleType.SYSTEM_ADMIN, RoleType.DEAN)
+  @Roles(RoleType.ADMIN)
   remove(@Param('id') id: string, @Req() req: any) {
     return this.departmentsService.remove(id, req.user);
   }

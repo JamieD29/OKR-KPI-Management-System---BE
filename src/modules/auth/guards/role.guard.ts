@@ -4,7 +4,7 @@ import { ROLES_KEY } from '../decorators/role.decorator'; // 👈 Import đúng 
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(private reflector: Reflector) { }
 
   canActivate(context: ExecutionContext): boolean {
     const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
@@ -23,7 +23,7 @@ export class RolesGuard implements CanActivate {
     }
 
     // 🔥 FIX LOGIC QUAN TRỌNG:
-    // Role trong user có thể là String ('SUPER_ADMIN') hoặc Object ({ id: 1, slug: 'SUPER_ADMIN' })
+    // Role trong user có thể là String ('ADMIN') hoặc Object ({ id: '...', slug: 'ADMIN' })
     // Ta cần xử lý cả 2 trường hợp để không bị lỗi
     const hasRole = user.roles.some((role: any) => {
       const roleSlug = typeof role === 'string' ? role : role.slug; // Lấy slug nếu là object

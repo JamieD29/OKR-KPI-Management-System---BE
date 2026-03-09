@@ -12,6 +12,7 @@ import {
 } from 'typeorm';
 import { Role } from './role.entity';
 import { Department } from './department.entity';
+import { ManagementPosition } from './management-position.entity';
 
 // --- 🔥 1. ĐỊNH NGHĨA ENUM (Để đảm bảo dữ liệu nhất quán) ---
 export enum AcademicRank {
@@ -138,6 +139,15 @@ export class User {
   profileCompleted: boolean;
 
   // --- 👆 HẾT PHẦN THÊM MỚI ---
+
+  // Chức vụ quản lý (Admin tự định nghĩa: Trưởng khoa, Phó khoa, ...)
+  @ManyToOne(() => ManagementPosition, (pos) => pos.users, {
+    nullable: true,
+    eager: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'management_position_id' })
+  managementPosition: ManagementPosition;
 
   @ManyToOne(() => Department, (dept) => dept.users, {
     nullable: true,
