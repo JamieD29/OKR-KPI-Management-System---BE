@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ManagementPosition } from '../../database/entities/management-position.entity';
+import { ManagementPosition, PermissionLevel } from '../../database/entities/management-position.entity';
 
 @Injectable()
 export class ManagementPositionService {
@@ -22,7 +22,7 @@ export class ManagementPositionService {
     }
 
     // Tạo chức vụ mới
-    async create(data: { name: string; slug: string; description?: string }) {
+    async create(data: { name: string; slug: string; description?: string; permissionLevel?: PermissionLevel }) {
         // Chuẩn hóa slug thành UPPER_CASE
         const normalizedSlug = data.slug
             .toUpperCase()
@@ -43,6 +43,7 @@ export class ManagementPositionService {
             name: data.name,
             slug: normalizedSlug,
             description: data.description || undefined,
+            permissionLevel: data.permissionLevel || PermissionLevel.NONE,
         });
 
         return this.positionRepository.save(position);
@@ -51,7 +52,7 @@ export class ManagementPositionService {
     // Cập nhật chức vụ
     async update(
         id: string,
-        data: { name?: string; slug?: string; description?: string },
+        data: { name?: string; slug?: string; description?: string; permissionLevel?: PermissionLevel },
     ) {
         const position = await this.positionRepository.findOne({ where: { id } });
         if (!position) {
@@ -78,6 +79,7 @@ export class ManagementPositionService {
 
         if (data.name !== undefined) position.name = data.name;
         if (data.description !== undefined) position.description = data.description;
+        if (data.permissionLevel !== undefined) position.permissionLevel = data.permissionLevel;
 
         return this.positionRepository.save(position);
     }

@@ -8,6 +8,7 @@ import {
   Query, // 👈 Thêm để nhận query params (departmentId)
   UseGuards,
   Req,
+  ForbiddenException,
 } from '@nestjs/common';
 import { UsersService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -17,6 +18,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Roles } from '../auth/decorators/role.decorator';
 import { RolesGuard } from '../auth/guards/role.guard';
 import { RoleType } from '../../common/enums/role.enum';
+import { PermissionLevel } from '../../database/entities/management-position.entity';
 
 @Controller('users')
 // 👇 Thêm RolesGuard vào đây để nó check quyền cho các hàm bên dưới
@@ -40,8 +42,26 @@ export class UsersController {
 
   // 1. Lấy danh sách user — hỗ trợ filter theo departmentId
   @Get()
-  @Roles(RoleType.ADMIN)
-  async findAll(@Query('departmentId') departmentId?: string) {
+  async findAll(@Req() req, @Query('departmentId') departmentId?: string) {
+    const requester = await this.usersService.findOne(req.user.id);
+    const isAdmin = requester.roles.some((r) => r.slug === RoleType.ADMIN);
+    const mngLevel = requester.managementPosition?.permissionLevel;
+
+    const isKhoa = mngLevel === PermissionLevel.KHOA || mngLevel === PermissionLevel.SYSTEM;
+    const isDonVi = mngLevel === PermissionLevel.DON_VI;
+
+    if (!isAdmin && !isKhoa && !isDonVi) {
+      throw new ForbiddenException('Bạn không có quyền xem danh sách nhân sự');
+    }
+
+    if (isDonVi && !isAdmin && !isKhoa) {
+      // Ép truy vấn phải thuộc department của requester nếu là đơn vị
+      const filterDept = requester.department?.id;
+      if (!departmentId || departmentId !== filterDept) {
+        return this.usersService.findAll(filterDept);
+      }
+    }
+
     return this.usersService.findAll(departmentId);
   }
 
