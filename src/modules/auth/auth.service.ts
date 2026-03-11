@@ -106,7 +106,7 @@ export class AuthService {
     // Reload user with department relation (validateOAuthLogin chỉ load roles)
     const fullUser = await this.userRepository.findOne({
       where: { id: user.id },
-      relations: ['roles', 'department'],
+      relations: ['roles', 'department', 'managementPosition'],
     });
 
     const userRoles = fullUser?.roles || user.roles || [];
@@ -143,6 +143,14 @@ export class AuthService {
         profileCompleted: fullUser?.profileCompleted || false,
         department: fullUser?.department
           ? { id: fullUser.department.id, name: fullUser.department.name }
+          : null,
+        managementPosition: fullUser?.managementPosition
+          ? { 
+              id: fullUser.managementPosition.id, 
+              name: fullUser.managementPosition.name, 
+              slug: fullUser.managementPosition.slug,
+              permissionLevel: fullUser.managementPosition.permissionLevel
+            }
           : null,
       },
     };

@@ -8,6 +8,13 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 
+export enum PermissionLevel {
+    SYSTEM = 'SYSTEM',
+    KHOA = 'KHOA',
+    DON_VI = 'DON_VI',
+    NONE = 'NONE'
+}
+
 @Entity('management_positions')
 export class ManagementPosition {
     @PrimaryGeneratedColumn('uuid')
@@ -21,6 +28,14 @@ export class ManagementPosition {
 
     @Column({ type: 'text', nullable: true })
     description: string;
+
+    @Column({
+        type: 'enum',
+        enum: PermissionLevel,
+        default: PermissionLevel.NONE,
+        name: 'permission_level'
+    })
+    permissionLevel: PermissionLevel;
 
     @OneToMany(() => User, (user) => user.managementPosition)
     users: User[];

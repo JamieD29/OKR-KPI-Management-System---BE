@@ -89,7 +89,7 @@ export class UsersService {
     }
     return this.userRepository.find({
       where,
-      relations: ['roles', 'department'],
+      relations: ['roles', 'department', 'managementPosition'],
       order: {
         createdAt: 'DESC',
       },
@@ -102,7 +102,7 @@ export class UsersService {
   async findOne(id: string) {
     const user = await this.userRepository.findOne({
       where: { id },
-      relations: ['roles', 'department'],
+      relations: ['roles', 'department', 'managementPosition'],
     });
 
     if (!user) {
@@ -117,7 +117,7 @@ export class UsersService {
   async findByEmail(email: string) {
     return this.userRepository.findOne({
       where: { email },
-      relations: ['roles', 'department'],
+      relations: ['roles', 'department', 'managementPosition'],
     });
   }
 

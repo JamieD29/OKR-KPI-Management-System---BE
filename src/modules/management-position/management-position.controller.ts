@@ -13,6 +13,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/role.guard';
 import { Roles } from '../auth/decorators/role.decorator';
 import { RoleType } from '../../common/enums/role.enum';
+import { PermissionLevel } from '../../database/entities/management-position.entity';
 
 @Controller('management-positions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,7 +32,7 @@ export class ManagementPositionController {
     @Post()
     @Roles(RoleType.ADMIN)
     create(
-        @Body() body: { name: string; slug: string; description?: string },
+        @Body() body: { name: string; slug: string; description?: string; permissionLevel?: PermissionLevel },
     ) {
         return this.positionService.create(body);
     }
@@ -41,7 +42,7 @@ export class ManagementPositionController {
     @Roles(RoleType.ADMIN)
     update(
         @Param('id') id: string,
-        @Body() body: { name?: string; slug?: string; description?: string },
+        @Body() body: { name?: string; slug?: string; description?: string; permissionLevel?: PermissionLevel },
     ) {
         return this.positionService.update(id, body);
     }
