@@ -127,6 +127,10 @@ export class User {
   @Column({ type: 'date', nullable: true, name: 'join_date' })
   joinDate: Date;
 
+  // Ngày tháng năm sinh
+  @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
+  dateOfBirth: Date;
+
   @Column({
     name: 'staff_code',
     unique: true,
