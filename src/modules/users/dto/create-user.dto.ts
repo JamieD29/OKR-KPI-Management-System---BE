@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsArray, IsEnum } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, IsArray, IsEnum, IsDateString } from 'class-validator';
 import { RoleType } from '../../../common/enums/role.enum'; // Nhớ import đúng đường dẫn enum
 
 export class CreateUserDto {
@@ -25,4 +25,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   departmentId?: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'Ngày sinh sai định dạng (YYYY-MM-DD)' })
+  dateOfBirth?: string;
 }

@@ -54,6 +54,10 @@ export class UpdateProfileDto {
   staffCode?: string;
 
   @IsOptional()
+  @IsDateString({}, { message: 'Ngày sinh sai định dạng (YYYY-MM-DD)' })
+  dateOfBirth?: string;
+
+  @IsOptional()
   @IsBoolean({ message: 'profileCompleted phải là boolean' })
   profileCompleted?: boolean;
 }
