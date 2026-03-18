@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   CreateDateColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 // 👇 Import User đi ngược ra 1 cấp folder
 import { User } from '../user.entity';
@@ -18,13 +19,13 @@ export class UserOkr {
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
   user: User;
-  @Column()
+  @Column({ name: 'user_id', nullable: true })
   userId: string;
 
   @ManyToOne(() => EvaluationCycle)
   @JoinColumn({ name: 'cycle_id' })
   cycle: EvaluationCycle;
-  @Column()
+  @Column({ name: 'cycle_id', nullable: true })
   cycleId: string;
 
   @Column()
@@ -38,6 +39,25 @@ export class UserOkr {
   @Column({ type: 'float', default: 0 })
   totalScore: number; // Điểm tổng kết mục này (đã nhân trọng số nếu có)
 
+  @Column({ nullable: true })
+  templateId: string;
+
+  @Column({ default: 'PENDING' })
+  status: string; // PENDING, NEGOTIATING, ACCEPTED, REJECTED
+
+  @Column({ type: 'jsonb', nullable: true })
+  proposedChanges: any;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deadline: Date;
+
+  // Dữ liệu tự khai từ user: { [krId]: { quantity: number, evidence: string } }
+  @Column({ type: 'jsonb', nullable: true })
+  selfReportData: any;
+
   @CreateDateColumn()
   createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
 }

@@ -4,9 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
 } from 'typeorm';
-import { UserKpi } from './user-kpi.entity';
 
 export enum EvaluationStatus {
   OPEN = 'OPEN', // Đang mở cho nhập liệu
@@ -37,8 +35,4 @@ export class EvaluationCycle {
 
   @UpdateDateColumn()
   updatedAt: Date;
-
-  // 👇 THÊM ĐOẠN NÀY VÀO:
-  @OneToMany(() => UserKpi, (userKpi) => userKpi.cycle)
-  userKpis: UserKpi[];
 }

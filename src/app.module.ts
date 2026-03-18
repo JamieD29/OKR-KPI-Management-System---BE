@@ -12,16 +12,15 @@ import { AllowedDomain } from './database/entities/allowed-domain.entity';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DepartmentsModule } from './modules/departments/departments.module';
-// 👇 Import các Entity liên quan đến Performance
+// 👇 Import các Entity liên quan đến Performance (KPI đã loại bỏ)
 import { EvaluationCycle } from './database/entities/performance/evaluation-cycle.entity';
-import { KpiCategory } from './database/entities/performance/kpi-category.entity';
-import { KpiTemplate } from './database/entities/performance/kpi-template.entity';
-import { UserKpi } from './database/entities/performance/user-kpi.entity';
 import { UserOkr } from './database/entities/performance/user-okr.entity';
+import { OkrTemplate } from './database/entities/performance/okr-template.entity';
 import { PerformanceModule } from './modules/performance/performance.module'; // 👈 Import
 //import Sytemlog
 import { SystemLogsModule } from './modules/system-logs/system-logs.module';
 import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
+import { OkrTemplateModule } from './modules/okr-template/okr-template.module';
 // 👇 Import Database Seeder để tự động seed data khi khởi động
 import { DatabaseSeederService } from './database/database-seeder.service';
 // 👇 Import Management Position & Notification
@@ -43,10 +42,8 @@ import { NotificationModule } from './modules/notification/notification.module';
         Department,
         AllowedDomain,
         EvaluationCycle,
-        KpiCategory,
-        KpiTemplate,
-        UserKpi,
         UserOkr,
+        OkrTemplate,
         ManagementPosition,
         Notification,
       ],
@@ -61,6 +58,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     PerformanceModule,
     SystemLogsModule,
     OkrModule, // 👈 Đăng ký module Performance
+    OkrTemplateModule,
     ManagementPositionModule,
     NotificationModule,
   ],
