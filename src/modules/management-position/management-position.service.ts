@@ -6,12 +6,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ManagementPosition, PermissionLevel } from '../../database/entities/management-position.entity';
+import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance/evaluation-cycle.entity';
 
 @Injectable()
 export class ManagementPositionService {
     constructor(
         @InjectRepository(ManagementPosition)
         private positionRepository: Repository<ManagementPosition>,
+        @InjectRepository(EvaluationCycle)
+        private cycleRepository: Repository<EvaluationCycle>,
     ) { }
 
     // Lấy tất cả chức vụ quản lý
@@ -86,6 +89,12 @@ export class ManagementPositionService {
 
     // Xóa chức vụ
     async remove(id: string) {
+        // Kiểm tra xem có cycle nào đang OPEN không
+        const activeCycle = await this.cycleRepository.findOne({ where: { status: EvaluationStatus.OPEN } });
+        if (activeCycle) {
+            throw new ConflictException('Không thể xóa chức vụ quản lý trong quá trình đánh giá (có kỳ đánh giá đang mở).');
+        }
+
         const position = await this.positionRepository.findOne({ where: { id } });
         if (!position) {
             throw new NotFoundException(`Chức vụ với ID "${id}" không tồn tại`);
