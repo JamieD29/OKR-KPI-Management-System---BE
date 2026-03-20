@@ -23,7 +23,7 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req, @Res() res) {
     const result = await this.authService.login(req.user);
-    const FRONTEND_URL = 'http://localhost:5173';
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     return res.redirect(
       `${FRONTEND_URL}/login?accessToken=${result.access_token}&user=${encodeURIComponent(JSON.stringify(result.user))}`,
@@ -40,7 +40,7 @@ export class AuthController {
   @UseGuards(AuthGuard('microsoft'))
   async microsoftAuthRedirect(@Req() req, @Res() res) {
     const data = await this.authService.login(req.user);
-    const FRONTEND_URL = 'http://localhost:5173';
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     return res.redirect(
       // 👈 Sửa lại JSON.stringify(data.user) để Frontend nhận đúng format

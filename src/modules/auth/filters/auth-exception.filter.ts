@@ -16,8 +16,8 @@ export class AuthExceptionFilter implements ExceptionFilter {
     const status = exception.getStatus();
     const exceptionResponse: any = exception.getResponse();
 
-    // URL của Frontend (Sửa lại port 5173 hoặc port FE của bạn)
-    const FRONTEND_URL = 'http://localhost:5173';
+    // URL của Frontend (Lấy từ biến môi trường hoặc mặc định localhost)
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
     // Kiểm tra nếu đúng là lỗi do mình throw ra bên AuthService
     if (exceptionResponse.message === 'DOMAIN_NOT_ALLOWED') {
