@@ -27,7 +27,7 @@ import { AllowedDomain } from '../../database/entities/allowed-domain.entity';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET'),
+        secret: configService.get<string>('JWT_SECRET') || 'secret-mac-dinh-neu-quen-set-env',
         signOptions: { expiresIn: '1d' }, // Token hết hạn sau 1 ngày
       }),
       inject: [ConfigService],
