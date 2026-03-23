@@ -1,0 +1,398 @@
+<!-- File này để xem cấu trúc database -->
+
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OKR Management System - ERD Diagram</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            min-height: 100vh;
+            color: #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 {
+            margin: 30px 0 10px;
+            font-size: 2rem;
+            background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 20px;
+            font-size: 0.95rem;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .controls button {
+            padding: 8px 18px;
+            border: 1px solid #3a7bd5;
+            background: rgba(58, 123, 213, 0.15);
+            color: #7eb8ff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+        }
+        .controls button:hover {
+            background: rgba(58, 123, 213, 0.35);
+            transform: translateY(-1px);
+        }
+        #diagram-container {
+            width: 95%;
+            max-width: 1400px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 40px;
+            overflow-x: auto;
+        }
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .legend {
+            width: 95%;
+            max-width: 1400px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        .legend-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
+        }
+        .legend-card h3 {
+            font-size: 0.95rem;
+            color: #7eb8ff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .legend-card p {
+            font-size: 0.85rem;
+            color: #aaa;
+            line-height: 1.5;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-core { background: rgba(58,123,213,0.3); color: #7eb8ff; }
+        .badge-okr { background: rgba(0,210,255,0.2); color: #00d2ff; }
+        .badge-perf { background: rgba(168,85,247,0.2); color: #c084fc; }
+        .badge-sys { background: rgba(234,179,8,0.2); color: #fbbf24; }
+        footer {
+            color: #555;
+            padding: 20px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+<h1>📊 OKR Management System — ERD</h1>
+<p class="subtitle">Entity Relationship Diagram — Tổng quan cấu trúc Database</p>
+
+<div class="controls">
+    <button onclick="downloadSVG()">⬇️ Tải SVG</button>
+    <button onclick="downloadPNG()">🖼️ Tải PNG</button>
+    <button onclick="toggleFullscreen()">⛶ Toàn màn hình</button>
+</div>
+
+<div id="diagram-container">
+<pre class="mermaid">
+erDiagram
+    %% ===== CORE TABLES =====
+    users {
+        UUID id PK
+        VARCHAR email UK
+        VARCHAR name
+        TEXT avatar_url
+        TEXT google_id
+        TEXT microsoft_id
+        BOOLEAN is_active
+        ENUM job_title
+        ENUM academic_rank
+        ENUM degree
+        ENUM gender
+        FLOAT teaching_hours
+        TEXT awards
+        TEXT intellectual_property
+        DATE join_date
+        DATE date_of_birth
+        VARCHAR staff_code UK
+        BOOLEAN profile_completed
+        UUID department_id FK
+        UUID management_position_id FK
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    roles {
+        UUID id PK
+        VARCHAR name UK
+        VARCHAR slug UK
+        TEXT description
+    }
+
+    user_roles {
+        UUID user_id FK
+        UUID role_id FK
+    }
+
+    departments {
+        UUID id PK
+        VARCHAR name
+        VARCHAR code UK
+        VARCHAR description
+    }
+
+    management_positions {
+        UUID id PK
+        VARCHAR name
+        VARCHAR slug UK
+        TEXT description
+        ENUM permission_level
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+    }
+
+    allowed_domains {
+        UUID id PK
+        VARCHAR domain UK
+        TIMESTAMP added_at
+    }
+
+    %% ===== OKR TABLES =====
+    objectives {
+        UUID id PK
+        VARCHAR title
+        VARCHAR type
+        UUID cycleId FK
+        UUID departmentId FK
+        UUID userId FK
+        FLOAT progress
+        VARCHAR status
+        TIMESTAMP createdAt
+    }
+
+    key_results {
+        UUID id PK
+        VARCHAR title
+        FLOAT target
+        FLOAT current
+        VARCHAR unit
+        UUID objectiveId FK
+    }
+
+    %% ===== PERFORMANCE TABLES =====
+    evaluation_cycles {
+        UUID id PK
+        VARCHAR name
+        ENUM status
+        DATE startDate
+        DATE endDate
+        TIMESTAMP createdAt
+        TIMESTAMP updatedAt
+    }
+
+    okr_templates {
+        UUID id PK
+        VARCHAR title
+        UUID departmentId FK
+        UUID positionId FK
+        VARCHAR jobTitle
+        VARCHAR positionName
+        UUID createdByUserId FK
+        VARCHAR createdByName
+        JSONB structure
+        TIMESTAMP createdAt
+        TIMESTAMP updatedAt
+    }
+
+    user_okrs {
+        UUID id PK
+        UUID user_id FK
+        UUID cycle_id FK
+        VARCHAR objective
+        JSONB keyResults
+        FLOAT totalScore
+        UUID templateId FK
+        VARCHAR status
+        JSONB proposedChanges
+        TIMESTAMP deadline
+        JSONB selfReportData
+        TIMESTAMP createdAt
+        TIMESTAMP updatedAt
+    }
+
+    %% ===== SYSTEM TABLES =====
+    notifications {
+        UUID id PK
+        UUID user_id FK
+        TEXT message
+        BOOLEAN is_read
+        TIMESTAMP created_at
+    }
+
+    system_logs {
+        UUID id PK
+        UUID user_id FK
+        VARCHAR action
+        VARCHAR resource
+        TEXT message
+        JSONB details
+        ENUM status
+        TIMESTAMP created_at
+    }
+
+    %% ===== RELATIONSHIPS =====
+    users ||--o{ user_roles : "has"
+    roles ||--o{ user_roles : "assigned to"
+    departments ||--o{ users : "contains"
+    management_positions ||--o{ users : "holds"
+
+    users ||--o{ objectives : "owns"
+    departments ||--o{ objectives : "has dept OKR"
+    objectives ||--o{ key_results : "has"
+
+    evaluation_cycles ||--o{ objectives : "belongs to"
+    evaluation_cycles ||--o{ user_okrs : "evaluated in"
+
+    users ||--o{ user_okrs : "assigned"
+    okr_templates ||--o{ user_okrs : "based on"
+
+    users ||--o{ notifications : "receives"
+    users ||--o{ system_logs : "performed by"
+</pre>
+</div>
+
+<div class="legend">
+    <div class="legend-card">
+        <h3><span class="badge badge-core">CORE</span> Bảng Người dùng & Quyền</h3>
+        <p><b>users</b> — Thông tin người dùng, hồ sơ cá nhân<br>
+        <b>roles</b> — Vai trò (ADMIN, USER)<br>
+        <b>user_roles</b> — Bảng junction liên kết Users ↔ Roles<br>
+        <b>departments</b> — Bộ môn / Khoa<br>
+        <b>management_positions</b> — Chức vụ quản lý (Trưởng khoa, Phó khoa…)</p>
+    </div>
+    <div class="legend-card">
+        <h3><span class="badge badge-okr">OKR</span> Bảng OKR Cơ bản</h3>
+        <p><b>objectives</b> — Mục tiêu (cá nhân hoặc bộ môn)<br>
+        <b>key_results</b> — Kết quả then chốt gắn với mục tiêu<br>
+        <b>allowed_domains</b> — Domain email được phép đăng nhập</p>
+    </div>
+    <div class="legend-card">
+        <h3><span class="badge badge-perf">PERFORMANCE</span> Đánh giá & Mẫu OKR</h3>
+        <p><b>evaluation_cycles</b> — Kỳ đánh giá (Học kỳ 1, 2…)<br>
+        <b>okr_templates</b> — Mẫu OKR do quản lý tạo<br>
+        <b>user_okrs</b> — OKR được gán cho từng người dùng</p>
+    </div>
+    <div class="legend-card">
+        <h3><span class="badge badge-sys">SYSTEM</span> Hệ thống & Logs</h3>
+        <p><b>notifications</b> — Thông báo gửi cho người dùng<br>
+        <b>system_logs</b> — Nhật ký hoạt động hệ thống (ai làm gì, lúc nào)</p>
+    </div>
+</div>
+
+<footer>OKR Management System — ERD generated from TypeORM entities — 2026-03-21</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>
+    mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        er: {
+            diagramPadding: 20,
+            layoutDirection: 'TB',
+            minEntityWidth: 200,
+            minEntityHeight: 30,
+            entityPadding: 15,
+            useMaxWidth: false,
+        },
+        themeVariables: {
+            primaryColor: '#3a7bd5',
+            edgeLabelBackground: '#1a1a2e',
+            lineColor: '#5a9fd4',
+        }
+    });
+
+    function downloadSVG() {
+        const svg = document.querySelector('.mermaid svg');
+        if (!svg) { alert('Diagram chưa render xong!'); return; }
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(svg);
+        const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'OKR_System_ERD.svg';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function downloadPNG() {
+        const svg = document.querySelector('.mermaid svg');
+        if (!svg) { alert('Diagram chưa render xong!'); return; }
+        const serializer = new XMLSerializer();
+        const svgStr = serializer.serializeToString(svg);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        const svgBlob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        img.onload = function () {
+            canvas.width = img.width * 2;
+            canvas.height = img.height * 2;
+            ctx.scale(2, 2);
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            const pngUrl = canvas.toDataURL('image/png');
+            const a = document.createElement('a');
+            a.href = pngUrl;
+            a.download = 'OKR_System_ERD.png';
+            a.click();
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+    }
+
+    function toggleFullscreen() {
+        const container = document.getElementById('diagram-container');
+        if (!document.fullscreenElement) {
+            container.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+    }
+</script>
+
+</body>
+</html>
