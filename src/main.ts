@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,6 +14,16 @@ async function bootstrap() {
       transform: true, // Tự động chuyển đổi kiểu dữ liệu (VD: chuỗi "1" -> số 1)
     }),
   );
+
+  const config = new DocumentBuilder()
+    .setTitle('OKR KPI Management System API')
+    .setDescription('The OKR KPI Management System API description')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
+
   const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
