@@ -27,7 +27,7 @@ ON CONFLICT DO NOTHING;
 -- Kiểm tra: SELECT u.email FROM user_roles ur JOIN users u ON ur.user_id = u.id JOIN roles r ON ur.role_id = r.id WHERE r.slug = 'ADMIN';
 
 
--- ===== PHẦN C: Chuẩn hóa role USER =====
+
 -- Nếu slug 'USER' chưa tồn tại → rename LECTURER/user thành USER
 UPDATE roles
 SET slug = 'USER', name = 'User'
@@ -54,8 +54,8 @@ WHERE slug IN ('LECTURER', 'user')
 -- Kiểm tra: SELECT * FROM roles WHERE slug = 'USER';
 
 
--- ===== PHẦN D: Dọn sạch role cũ =====
--- Bước 1: Xóa liên kết trong user_roles
+
+-- Xóa liên kết trong user_roles
 DELETE FROM user_roles
 WHERE role_id IN (
     SELECT id FROM roles
@@ -65,13 +65,9 @@ WHERE role_id IN (
     )
 );
 
--- Bước 2: Xóa role cũ
+--  Xóa role cũ
 DELETE FROM roles
 WHERE slug IN (
     'SUPER_ADMIN', 'SYSTEM_ADMIN', 'DEAN', 'HEAD_OF_DEPARTMENT',
     'system-admin', 'dean', 'head-of-department'
 );
-
--- ===== KIỂM TRA CUỐI CÙNG =====
--- Chỉ còn 2 role: ADMIN và USER
--- SELECT * FROM roles;

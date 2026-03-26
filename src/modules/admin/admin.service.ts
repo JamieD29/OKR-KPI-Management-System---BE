@@ -12,8 +12,8 @@ export class AdminService {
   ) {}
 
   async findAll() {
-    return { 
-        domains: await this.domainRepository.find({ order: { addedAt: 'DESC' } }) 
+    return {
+      domains: await this.domainRepository.find({ order: { addedAt: 'DESC' } }),
     };
   }
 
@@ -23,7 +23,7 @@ export class AdminService {
 
     const newDomain = this.domainRepository.create({
       domain: domainName,
-      addedAt: new Date()
+      addedAt: new Date(),
     });
     return { domain: await this.domainRepository.save(newDomain) };
   }

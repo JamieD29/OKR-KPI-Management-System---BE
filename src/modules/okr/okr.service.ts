@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Objective } from '../../database/entities/objective.entity';
@@ -13,7 +18,7 @@ export class OkrService {
     @InjectRepository(UserOkr)
     private userOkrRepo: Repository<UserOkr>,
     private notificationService: NotificationService,
-  ) { }
+  ) {}
 
   // Hàm LƯU OKR MỚI (Department objectives - legacy)
   async createDepartmentOkr(data: any) {
@@ -86,7 +91,10 @@ export class OkrService {
     }
 
     await this.userOkrRepo.save(okr);
-    await this.notificationService.create(okr.userId, `✅ Đề xuất điều chỉnh OKR "${okr.objective}" đã được duyệt!`);
+    await this.notificationService.create(
+      okr.userId,
+      `✅ Đề xuất điều chỉnh OKR "${okr.objective}" đã được duyệt!`,
+    );
     return okr;
   }
 
@@ -98,7 +106,10 @@ export class OkrService {
     okr.proposedChanges = null;
 
     await this.userOkrRepo.save(okr);
-    await this.notificationService.create(okr.userId, `❌ Đề xuất OKR "${okr.objective}" bị từ chối: ${reason}`);
+    await this.notificationService.create(
+      okr.userId,
+      `❌ Đề xuất OKR "${okr.objective}" bị từ chối: ${reason}`,
+    );
     return okr;
   }
 
@@ -137,7 +148,7 @@ export class OkrService {
     });
   }
 
-  async reviewOkr(id: string, managerData: { finalScore: number, comment?: string }) {
+  async reviewOkr(id: string, managerData: { finalScore: number; comment?: string }) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
 

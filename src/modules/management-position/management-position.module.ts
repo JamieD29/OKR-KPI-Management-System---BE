@@ -6,9 +6,9 @@ import { ManagementPositionController } from './management-position.controller';
 import { ManagementPositionService } from './management-position.service';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([ManagementPosition, EvaluationCycle])],
-    controllers: [ManagementPositionController],
-    providers: [ManagementPositionService],
-    exports: [ManagementPositionService],
+  imports: [TypeOrmModule.forFeature([ManagementPosition, EvaluationCycle])],
+  controllers: [ManagementPositionController],
+  providers: [ManagementPositionService],
+  exports: [ManagementPositionService],
 })
-export class ManagementPositionModule { }
+export class ManagementPositionModule {}

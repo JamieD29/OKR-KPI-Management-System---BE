@@ -1,4 +1,13 @@
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, IsDateString, Min, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsDateString,
+  Min,
+  IsUUID,
+} from 'class-validator';
 // 👇 SỬA LẠI ĐƯỜNG DẪN IMPORT NÀY CHO ĐÚNG CẤU TRÚC
 import { AcademicRank, Degree, JobTitle, Gender } from '../../../database/entities/user.entity';
 

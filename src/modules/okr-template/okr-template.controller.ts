@@ -34,7 +34,10 @@ export class OkrTemplateController {
   }
 
   @Post(':id/apply')
-  applyTemplate(@Param('id') id: string, @Body() applyDto: { userId: string, cycleId: string, deadline?: Date }) {
+  applyTemplate(
+    @Param('id') id: string,
+    @Body() applyDto: { userId: string; cycleId: string; deadline?: Date },
+  ) {
     return this.okrTemplateService.applyTemplate(id, applyDto);
   }
 }

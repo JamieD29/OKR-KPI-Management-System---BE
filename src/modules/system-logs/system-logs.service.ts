@@ -13,7 +13,7 @@ export class SystemLogsService {
     private readonly logRepository: Repository<SystemLog>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   // 1. Hàm để các service khác gọi khi muốn ghi log
   async createLog(data: {
@@ -31,7 +31,9 @@ export class SystemLogsService {
       if (userExists) {
         userRef = { id: data.userId };
       } else {
-        this.logger.warn(`User ID "${data.userId}" không tồn tại trong DB, ghi log với user = null`);
+        this.logger.warn(
+          `User ID "${data.userId}" không tồn tại trong DB, ghi log với user = null`,
+        );
       }
     }
 

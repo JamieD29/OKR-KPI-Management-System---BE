@@ -8,7 +8,7 @@ import { RoleType } from '../../common/enums/role.enum';
 @Controller('system-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class SystemLogsController {
-  constructor(private readonly systemLogsService: SystemLogsService) { }
+  constructor(private readonly systemLogsService: SystemLogsService) {}
 
   // Chỉ Admin mới được xem Log
   @Get()

@@ -10,7 +10,7 @@ import { RoleType } from '../../common/enums/role.enum'; // 👈 QUAN TRỌNG: I
 @Controller('departments')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DepartmentsController {
-  constructor(private readonly departmentsService: DepartmentsService) { }
+  constructor(private readonly departmentsService: DepartmentsService) {}
 
   @Post()
   @Roles(RoleType.ADMIN) // 👈 Dùng Enum cho chuẩn

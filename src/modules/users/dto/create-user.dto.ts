@@ -1,4 +1,12 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString, IsArray, IsEnum, IsDateString } from 'class-validator';
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsArray,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
 import { RoleType } from '../../../common/enums/role.enum'; // Nhớ import đúng đường dẫn enum
 
 export class CreateUserDto {
