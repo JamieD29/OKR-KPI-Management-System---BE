@@ -65,4 +65,4 @@ import { NotificationModule } from './modules/notification/notification.module';
   controllers: [AppController],
   providers: [AppService, DatabaseSeederService], // 👈 Thêm Seeder vào providers
 })
-export class AppModule { }
+export class AppModule {}

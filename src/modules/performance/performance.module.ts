@@ -7,9 +7,7 @@ import { PerformanceService } from './performance.service';
 import { EvaluationCycle } from '../../database/entities/performance/evaluation-cycle.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([EvaluationCycle]),
-  ],
+  imports: [TypeOrmModule.forFeature([EvaluationCycle])],
   controllers: [PerformanceController],
   providers: [PerformanceService],
   exports: [PerformanceService],

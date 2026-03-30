@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 
 @Entity('okr_templates')
 export class OkrTemplate {
@@ -29,7 +35,7 @@ export class OkrTemplate {
   // JSONB lưu trữ toàn bộ cấu trúc phân cấp (A -> 1 -> 1.1) và các mức điểm
   // Mỗi item có: id, type, title, maxScore, unitScore, unit, items[]
   @Column({ type: 'jsonb', default: [] })
-  structure: any; 
+  structure: any;
 
   @CreateDateColumn()
   createdAt: Date;

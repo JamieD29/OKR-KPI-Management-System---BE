@@ -33,7 +33,7 @@ export class UsersService {
     private positionRepository: Repository<ManagementPosition>,
 
     private notificationService: NotificationService,
-  ) { }
+  ) {}
 
   // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug
   private normalizeSlug(slug: string): string {

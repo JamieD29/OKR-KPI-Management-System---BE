@@ -8,10 +8,7 @@ import { User } from '../../database/entities/user.entity';
 import { NotificationModule } from '../notification/notification.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([OkrTemplate, UserOkr, User]),
-    NotificationModule,
-  ],
+  imports: [TypeOrmModule.forFeature([OkrTemplate, UserOkr, User]), NotificationModule],
   controllers: [OkrTemplateController],
   providers: [OkrTemplateService],
   exports: [OkrTemplateService],

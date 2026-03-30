@@ -9,10 +9,7 @@ import { NotificationModule } from '../notification/notification.module';
 
 @Module({
   // Phải đăng ký 2 cái Entity này thì Service mới dùng được Repo
-  imports: [
-    TypeOrmModule.forFeature([Objective, KeyResult, UserOkr]),
-    NotificationModule
-  ],
+  imports: [TypeOrmModule.forFeature([Objective, KeyResult, UserOkr]), NotificationModule],
   controllers: [OkrController],
   providers: [OkrService],
 })

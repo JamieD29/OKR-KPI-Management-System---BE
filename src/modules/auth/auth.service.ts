@@ -15,7 +15,7 @@ export class AuthService {
     @InjectRepository(Role) private roleRepository: Repository<Role>,
     private jwtService: JwtService,
     private systemLogsService: SystemLogsService, // 👈 Đã Inject SystemLogsService
-  ) { }
+  ) {}
 
   async getPublicDomains() {
     const domains = await this.domainRepository.find({ select: ['domain'] });
@@ -145,11 +145,11 @@ export class AuthService {
           ? { id: fullUser.department.id, name: fullUser.department.name }
           : null,
         managementPosition: fullUser?.managementPosition
-          ? { 
-              id: fullUser.managementPosition.id, 
-              name: fullUser.managementPosition.name, 
+          ? {
+              id: fullUser.managementPosition.id,
+              name: fullUser.managementPosition.name,
               slug: fullUser.managementPosition.slug,
-              permissionLevel: fullUser.managementPosition.permissionLevel
+              permissionLevel: fullUser.managementPosition.permissionLevel,
             }
           : null,
       },

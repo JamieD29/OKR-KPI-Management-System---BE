@@ -24,7 +24,7 @@ import { PermissionLevel } from '../../database/entities/management-position.ent
 // 👇 Thêm RolesGuard vào đây để nó check quyền cho các hàm bên dưới
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) { }
+  constructor(private readonly usersService: UsersService) {}
 
   @Get('profile')
   getProfile(@Req() req) {

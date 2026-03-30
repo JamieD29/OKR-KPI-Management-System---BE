@@ -12,4 +12,4 @@ import { User } from '../../database/entities/user.entity';
   providers: [SystemLogsService],
   exports: [SystemLogsService], // Export để các module khác xài
 })
-export class SystemLogsModule { }
+export class SystemLogsModule {}

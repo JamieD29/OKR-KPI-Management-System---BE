@@ -20,14 +20,14 @@ export class OkrTemplateService {
 
   async findAll() {
     return this.okrTemplateRepository.find({
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 
   async findByDepartment(departmentId: string) {
     return this.okrTemplateRepository.find({
       where: { departmentId },
-      order: { createdAt: 'DESC' }
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -57,7 +57,10 @@ export class OkrTemplateService {
   }
 
   // Chức năng "Áp dụng Template": Tạo UserOkr + Gửi thông báo cho user
-  async applyTemplate(templateId: string, applyDto: { userId: string, cycleId: string, deadline?: Date }) {
+  async applyTemplate(
+    templateId: string,
+    applyDto: { userId: string; cycleId: string; deadline?: Date },
+  ) {
     const template = await this.findOne(templateId);
     if (!template.structure || template.structure.length === 0) {
       throw new BadRequestException('Template structure is empty');
