@@ -67,4 +67,26 @@ export class OkrController {
   async reviewOkr(@Param('id') id: string, @Body() body: any) {
     return this.okrService.reviewOkr(id, body);
   }
+
+  // --- REAL EVALUATION ENDPOINTS ---
+
+  @Post('evaluations/sync')
+  async syncDummyEvaluations() {
+    return this.okrService.syncDummyEvaluations();
+  }
+
+  @Get('evaluations/submitted')
+  async getSubmittedEvaluations() {
+    return this.okrService.getSubmittedEvaluations();
+  }
+
+  @Put('evaluations/bulk-review')
+  async bulkReviewEvaluations(@Body() body: any) {
+    return this.okrService.bulkSaveEvaluations(body.updates);
+  }
+
+  @Put('evaluations/:id/review')
+  async reviewEvaluation(@Param('id') id: string, @Body() body: any) {
+    return this.okrService.saveEvaluation(id, body);
+  }
 }

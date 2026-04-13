@@ -8,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Objective } from '../../database/entities/objective.entity';
 import { UserOkr } from '../../database/entities/performance/user-okr.entity';
+import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -17,6 +18,8 @@ export class OkrService {
     private objectiveRepo: Repository<Objective>,
     @InjectRepository(UserOkr)
     private userOkrRepo: Repository<UserOkr>,
+    @InjectRepository(UserEvaluation)
+    private userEvaluationRepo: Repository<UserEvaluation>,
     private notificationService: NotificationService,
   ) {}
 
@@ -161,5 +164,65 @@ export class OkrService {
       `📊 OKR "${okr.objective}" đã được chấm điểm: ${managerData.finalScore} điểm. ${managerData.comment || ''}`,
     );
     return okr;
+  }
+
+  // --- REAL EVALUATION WORKFLOW (Grouped by User) ---
+
+  async syncDummyEvaluations() {
+    // Helper/Demo function to generate UserEvaluations for all users who have submitted UserOkrs.
+    // In production, this would be triggered when a user officially "Submits everything".
+    const users = await this.userOkrRepo.query(`SELECT DISTINCT user_id FROM user_okrs`);
+    for (const r of users) {
+      let evalRecord = await this.userEvaluationRepo.findOne({ where: { userId: r.user_id } });
+      if (!evalRecord) {
+        evalRecord = this.userEvaluationRepo.create({
+          userId: r.user_id,
+          completionPercent: Math.floor(Math.random() * 40) + 60, // Mock 60-100%
+          selfScoreTotal: 85,
+          status: 'PENDING_EVALUATION',
+          evaluationData: [
+            { id: "A", name: "Nhiệm vụ Giảng dạy", selfScore: 35, principalScore: 0, maxScore: 40 },
+            { id: "B", name: "Nhiệm vụ Nghiên cứu khoa học", selfScore: 18, principalScore: 0, maxScore: 20 },
+            { id: "C", name: "Nhiệm vụ chuyên môn nghiệp vụ", selfScore: 15, principalScore: 0, maxScore: 15 },
+            { id: "D", name: "Nhiệm vụ lãnh đạo, quản lý...", selfScore: 10, principalScore: 0, maxScore: 15 },
+            { id: "E", name: "Các nhiệm vụ khác", selfScore: 7, principalScore: 0, maxScore: 10 },
+          ],
+        });
+        await this.userEvaluationRepo.save(evalRecord);
+      }
+    }
+    return { message: 'Synced User Evaluations' };
+  }
+
+  async getSubmittedEvaluations() {
+    return this.userEvaluationRepo.find({
+      relations: ['user', 'user.department', 'user.managementPosition'],
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  async saveEvaluation(evaluationId: string, managerData: { tasks: any[], principalScoreTotal: number }) {
+    const evalRecord = await this.userEvaluationRepo.findOne({ where: { id: evaluationId } });
+    if (!evalRecord) throw new NotFoundException('Evaluation not found');
+
+    evalRecord.evaluationData = managerData.tasks;
+    evalRecord.principalScoreTotal = managerData.principalScoreTotal;
+    evalRecord.status = 'EVALUATED';
+
+    await this.userEvaluationRepo.save(evalRecord);
+    return evalRecord;
+  }
+
+  async bulkSaveEvaluations(updates: { evaluationId: string, tasks: any[], principalScoreTotal: number }[]) {
+    for (const update of updates) {
+      const evalRecord = await this.userEvaluationRepo.findOne({ where: { id: update.evaluationId } });
+      if (evalRecord) {
+        evalRecord.evaluationData = update.tasks;
+        evalRecord.principalScoreTotal = update.principalScoreTotal;
+        evalRecord.status = 'EVALUATED';
+        await this.userEvaluationRepo.save(evalRecord);
+      }
+    }
+    return { success: true, count: updates.length };
   }
 }
