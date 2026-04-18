@@ -39,12 +39,29 @@ export class OkrTemplateService {
     return template;
   }
 
+  private validateTemplateStructure(structure?: any[]) {
+    if (!structure || structure.length === 0) return;
+    
+    let totalMaxScore = 0;
+    for (const obj of structure) {
+      totalMaxScore += Number(obj.maxScore) || 0;
+    }
+    
+    if (totalMaxScore !== 100) {
+      throw new BadRequestException(`Tổng điểm (maxScore) của tất cả các Nhiệm vụ phải chính xác bằng 100. Hiện tại đang là ${totalMaxScore}.`);
+    }
+  }
+
   async create(createDto: any) {
+    this.validateTemplateStructure(createDto.structure);
     const template = this.okrTemplateRepository.create(createDto);
     return this.okrTemplateRepository.save(template);
   }
 
   async update(id: string, updateDto: any) {
+    if (updateDto.structure) {
+      this.validateTemplateStructure(updateDto.structure);
+    }
     const template = await this.findOne(id);
     const updated = Object.assign(template, updateDto);
     return this.okrTemplateRepository.save(updated);

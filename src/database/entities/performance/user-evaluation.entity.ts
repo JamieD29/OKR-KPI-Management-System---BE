@@ -41,10 +41,24 @@ export class UserEvaluation {
   @Column({ default: 'PENDING_EVALUATION' })
   status: string; // PENDING_EVALUATION, EVALUATED
 
-  // Lưu chi tiết các Nhiệm vụ (A, B, C, D, E) dưới dạng mảng / object
-  // Ví dụ: [{ id: "A", name: "Nhiệm vụ Giảng dạy", maxScore: 40, selfScore: 35, principalScore: null }]
+  // Lưu chi tiết các Nhiệm vụ (A, B, C, D, E) dưới dạng mảng kết quả
+  // [{ id: "A", name: "Nhiệm vụ Giảng dạy", score: 35 }]
   @Column({ type: 'jsonb', default: [] })
   evaluationData: any;
+
+  // PHẦN III: TỰ NHẬN XÉT, XẾP LOẠI
+  @Column({ type: 'text', nullable: true })
+  selfComment: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  selfRating: string; // EXCELLENT, GOOD, POOR
+
+  // PHẦN IV: ĐÁNH GIÁ CỦA CẤP QUẢN LÝ
+  @Column({ type: 'text', nullable: true })
+  managerComment: string;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  managerRating: string; // EXCELLENT, GOOD, POOR
 
   @CreateDateColumn()
   createdAt: Date;
