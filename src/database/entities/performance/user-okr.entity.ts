@@ -55,6 +55,12 @@ export class UserOkr {
   @Column({ type: 'jsonb', nullable: true })
   selfReportData: any;
 
+  @Column({ type: 'jsonb', nullable: true })
+  managerReportData: any;
+
+  @Column({ type: 'float', nullable: true })
+  managerScore: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

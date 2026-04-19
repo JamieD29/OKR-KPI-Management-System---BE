@@ -60,19 +60,31 @@ export class OkrController {
 
   @Get('submitted')
   async getSubmittedOkrs() {
-    return this.okrService.getSubmittedOkrs();
+    return this.okrService.getSubmittedOkrs('SUBMITTED');
   }
 
-  @Put(':id/review')
-  async reviewOkr(@Param('id') id: string, @Body() body: any) {
-    return this.okrService.reviewOkr(id, body);
+  @Get('completed')
+  async getCompletedOkrs() {
+    return this.okrService.getSubmittedOkrs('COMPLETED');
   }
 
-  // --- REAL EVALUATION ENDPOINTS ---
+  @Put(':id/manager-review')
+  async managerReviewOkr(@Param('id') id: string, @Body() body: any) {
+    return this.okrService.managerReviewOkr(id, body.managerReportData);
+  }
 
-  @Post('evaluations/sync')
-  async syncDummyEvaluations() {
-    return this.okrService.syncDummyEvaluations();
+  // ==========================================
+  // --- EVALUATION FORM CONTROLLERS ---
+  // ==========================================
+
+  @Get('evaluations/my')
+  async getMyEvaluationForm(@Request() req) {
+    return this.okrService.getMyEvaluationForm(req.user.userId);
+  }
+
+  @Post('evaluations/my/submit')
+  async submitMyEvaluationForm(@Request() req, @Body() body: any) {
+    return this.okrService.submitMyEvaluationForm(req.user.userId, body);
   }
 
   @Get('evaluations/submitted')
@@ -80,13 +92,8 @@ export class OkrController {
     return this.okrService.getSubmittedEvaluations();
   }
 
-  @Put('evaluations/bulk-review')
-  async bulkReviewEvaluations(@Body() body: any) {
-    return this.okrService.bulkSaveEvaluations(body.updates);
-  }
-
   @Put('evaluations/:id/review')
-  async reviewEvaluation(@Param('id') id: string, @Body() body: any) {
-    return this.okrService.saveEvaluation(id, body);
+  async managerReviewEvaluation(@Param('id') id: string, @Body() body: any) {
+    return this.okrService.managerReviewEvaluation(id, body);
   }
 }

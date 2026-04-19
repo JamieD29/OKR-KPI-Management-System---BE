@@ -118,6 +118,81 @@ export class OkrService {
 
   // --- SELF-REPORT: User tự khai điểm ---
 
+  private calculateOkrScore(structure: any[], reportData: any): number {
+    if (!structure || !Array.isArray(structure)) return 0;
+    if (!reportData || typeof reportData !== 'object') return 0;
+
+    let grandTotal = 0;
+
+    for (const obj of structure) {
+      let objRawScore = 0;
+      const maxObjScore = Number(obj.maxScore) || 0;
+
+      if (obj.items && Array.isArray(obj.items)) {
+        for (const kr of obj.items) {
+          const krKey = `${obj.id}-${kr.id}`;
+          const krData = reportData[krKey];
+          const krQty = krData ? (Number(krData.quantity) || 0) : 0;
+          const krUnitScore = Number(kr.unitScore) || 0;
+          
+          const krCalcScore = krUnitScore > 0 ? krQty * krUnitScore : krQty;
+          const krCappedScore = Math.min(krCalcScore, Number(kr.maxScore) || Infinity);
+          objRawScore += krCappedScore;
+
+          if (kr.items && Array.isArray(kr.items)) {
+             for (const sub of kr.items) {
+               const subKey = `${obj.id}-${kr.id}-${sub.id}`;
+               const subData = reportData[subKey];
+               const subQty = subData ? (Number(subData.quantity) || 0) : 0;
+               const subUnitScore = Number(sub.unitScore) || 0;
+               
+               const subCalcScore = subUnitScore > 0 ? subQty * subUnitScore : subQty;
+               const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
+               objRawScore += subCappedScore;
+             }
+          }
+        }
+      }
+      const objScore = maxObjScore > 0 ? Math.min(objRawScore, maxObjScore) : objRawScore;
+      grandTotal += objScore;
+    }
+
+    return grandTotal;
+  }
+
+  // Tách hàm tính điểm từng Objective để dùng cho Phiếu đánh giá
+  private calcSingleObjectiveScore(obj: any, reportData: any): number {
+    let objRawScore = 0;
+    const maxObjScore = Number(obj.maxScore) || 0;
+
+    if (obj.items && Array.isArray(obj.items)) {
+      for (const kr of obj.items) {
+        const krKey = `${obj.id}-${kr.id}`;
+        const krData = reportData[krKey];
+        const krQty = krData ? (Number(krData.quantity) || 0) : 0;
+        const krUnitScore = Number(kr.unitScore) || 0;
+        
+        const krCalcScore = krUnitScore > 0 ? krQty * krUnitScore : krQty;
+        const krCappedScore = Math.min(krCalcScore, Number(kr.maxScore) || Infinity);
+        objRawScore += krCappedScore;
+
+        if (kr.items && Array.isArray(kr.items)) {
+           for (const sub of kr.items) {
+             const subKey = `${obj.id}-${kr.id}-${sub.id}`;
+             const subData = reportData[subKey];
+             const subQty = subData ? (Number(subData.quantity) || 0) : 0;
+             const subUnitScore = Number(sub.unitScore) || 0;
+             
+             const subCalcScore = subUnitScore > 0 ? subQty * subUnitScore : subQty;
+             const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
+             objRawScore += subCappedScore;
+           }
+        }
+      }
+    }
+    return maxObjScore > 0 ? Math.min(objRawScore, maxObjScore) : objRawScore;
+  }
+
   async submitSelfReport(id: string, userId: string, selfReportData: any) {
     const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -126,16 +201,9 @@ export class OkrService {
     }
 
     okr.selfReportData = selfReportData;
-    okr.status = 'SUBMITTED'; // Chuyển sang trạng thái "Đã nộp"
+    okr.status = 'SUBMITTED';
 
-    // Tính tổng điểm tự khai
-    let total = 0;
-    if (selfReportData && typeof selfReportData === 'object') {
-      Object.values(selfReportData).forEach((item: any) => {
-        total += Number(item.score) || 0;
-      });
-    }
-    okr.totalScore = total;
+    okr.totalScore = this.calculateOkrScore(okr.keyResults, selfReportData);
 
     await this.userOkrRepo.save(okr);
     return okr;
@@ -143,55 +211,95 @@ export class OkrService {
 
   // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
 
-  async getSubmittedOkrs() {
+  async getSubmittedOkrs(status: string = 'SUBMITTED') {
     return this.userOkrRepo.find({
-      where: { status: 'SUBMITTED' },
+      where: { status },
       relations: ['user', 'user.department', 'user.managementPosition'],
       order: { updatedAt: 'DESC' },
     });
   }
 
-  async reviewOkr(id: string, managerData: { finalScore: number; comment?: string }) {
+  async managerReviewOkr(id: string, managerReportData: any) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
 
-    okr.totalScore = managerData.finalScore;
+    okr.managerReportData = managerReportData;
+    okr.managerScore = this.calculateOkrScore(okr.keyResults, managerReportData);
     okr.status = 'COMPLETED';
 
     await this.userOkrRepo.save(okr);
     await this.notificationService.create(
       okr.userId,
-      `📊 OKR "${okr.objective}" đã được chấm điểm: ${managerData.finalScore} điểm. ${managerData.comment || ''}`,
+      `📊 OKR "${okr.objective}" đã được Trưởng khoa xem xét và duyệt: ${okr.managerScore} điểm.`,
     );
     return okr;
   }
 
-  // --- REAL EVALUATION WORKFLOW (Grouped by User) ---
+  // ==========================================
+  // --- EVALUATION FORM: PHIẾU ĐÁNH GIÁ ---
+  // ==========================================
 
-  async syncDummyEvaluations() {
-    // Helper/Demo function to generate UserEvaluations for all users who have submitted UserOkrs.
-    // In production, this would be triggered when a user officially "Submits everything".
-    const users = await this.userOkrRepo.query(`SELECT DISTINCT user_id FROM user_okrs`);
-    for (const r of users) {
-      let evalRecord = await this.userEvaluationRepo.findOne({ where: { userId: r.user_id } });
-      if (!evalRecord) {
-        evalRecord = this.userEvaluationRepo.create({
-          userId: r.user_id,
-          completionPercent: Math.floor(Math.random() * 40) + 60, // Mock 60-100%
-          selfScoreTotal: 85,
-          status: 'PENDING_EVALUATION',
-          evaluationData: [
-            { id: "A", name: "Nhiệm vụ Giảng dạy", selfScore: 35, principalScore: 0, maxScore: 40 },
-            { id: "B", name: "Nhiệm vụ Nghiên cứu khoa học", selfScore: 18, principalScore: 0, maxScore: 20 },
-            { id: "C", name: "Nhiệm vụ chuyên môn nghiệp vụ", selfScore: 15, principalScore: 0, maxScore: 15 },
-            { id: "D", name: "Nhiệm vụ lãnh đạo, quản lý...", selfScore: 10, principalScore: 0, maxScore: 15 },
-            { id: "E", name: "Các nhiệm vụ khác", selfScore: 7, principalScore: 0, maxScore: 10 },
-          ],
+  async getMyEvaluationForm(userId: string) {
+    let form = await this.userEvaluationRepo.findOne({ 
+      where: { userId }, 
+      relations: ['user', 'user.department', 'user.managementPosition'] 
+    });
+
+    const okr = await this.userOkrRepo.findOne({ where: { userId } });
+
+    // Cập nhật mảng cấu trúc Phần II từ OKR
+    const evaluationData: any[] = [];
+    let selfScoreTotal = 0;
+    let principalScoreTotal = 0;
+
+    if (okr && okr.keyResults && Array.isArray(okr.keyResults)) {
+      for (const obj of okr.keyResults) {
+        const selfScore = this.calcSingleObjectiveScore(obj, okr.selfReportData || {});
+        // Nếu manager đã duyệt OKR thì lấy điểm mgr, nều chưa thì = 0
+        const mgrScore = okr.managerReportData ? this.calcSingleObjectiveScore(obj, okr.managerReportData) : 0;
+        
+        evaluationData.push({
+          id: obj.id,
+          name: obj.title,
+          maxScore: obj.maxScore,
+          selfScore: selfScore,
+          principalScore: mgrScore
         });
-        await this.userEvaluationRepo.save(evalRecord);
+        
+        selfScoreTotal += selfScore;
+        principalScoreTotal += mgrScore;
       }
     }
-    return { message: 'Synced User Evaluations' };
+
+    if (!form) {
+      form = this.userEvaluationRepo.create({
+        userId,
+        status: 'PENDING_EVALUATION',
+        evaluationData,
+        selfScoreTotal,
+        principalScoreTotal
+      });
+      await this.userEvaluationRepo.save(form);
+    } else {
+      form.evaluationData = evaluationData;
+      form.selfScoreTotal = selfScoreTotal;
+      form.principalScoreTotal = principalScoreTotal;
+      await this.userEvaluationRepo.save(form);
+    }
+
+    return form;
+  }
+
+  async submitMyEvaluationForm(userId: string, body: any) {
+    const form = await this.getMyEvaluationForm(userId);
+    if (!form) throw new NotFoundException('Evaluation Form not found');
+
+    form.selfComment = body.selfComment;
+    form.selfRating = body.selfRating;
+    form.status = 'SUBMITTED';
+
+    await this.userEvaluationRepo.save(form);
+    return form;
   }
 
   async getSubmittedEvaluations() {
@@ -201,28 +309,16 @@ export class OkrService {
     });
   }
 
-  async saveEvaluation(evaluationId: string, managerData: { tasks: any[], principalScoreTotal: number }) {
-    const evalRecord = await this.userEvaluationRepo.findOne({ where: { id: evaluationId } });
-    if (!evalRecord) throw new NotFoundException('Evaluation not found');
+  async managerReviewEvaluation(id: string, body: any) {
+    const form = await this.userEvaluationRepo.findOne({ where: { id } });
+    if (!form) throw new NotFoundException('Evaluation form not found');
 
-    evalRecord.evaluationData = managerData.tasks;
-    evalRecord.principalScoreTotal = managerData.principalScoreTotal;
-    evalRecord.status = 'EVALUATED';
+    form.managerComment = body.managerComment;
+    form.managerRating = body.managerRating;
+    form.status = 'EVALUATED';
 
-    await this.userEvaluationRepo.save(evalRecord);
-    return evalRecord;
+    await this.userEvaluationRepo.save(form);
+    return form;
   }
 
-  async bulkSaveEvaluations(updates: { evaluationId: string, tasks: any[], principalScoreTotal: number }[]) {
-    for (const update of updates) {
-      const evalRecord = await this.userEvaluationRepo.findOne({ where: { id: update.evaluationId } });
-      if (evalRecord) {
-        evalRecord.evaluationData = update.tasks;
-        evalRecord.principalScoreTotal = update.principalScoreTotal;
-        evalRecord.status = 'EVALUATED';
-        await this.userEvaluationRepo.save(evalRecord);
-      }
-    }
-    return { success: true, count: updates.length };
-  }
 }
