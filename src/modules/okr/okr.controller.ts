@@ -79,12 +79,12 @@ export class OkrController {
 
   @Get('evaluations/my')
   async getMyEvaluationForm(@Request() req) {
-    return this.okrService.getMyEvaluationForm(req.user.userId);
+    return this.okrService.getMyEvaluationForm(req.user.id);
   }
 
   @Post('evaluations/my/submit')
   async submitMyEvaluationForm(@Request() req, @Body() body: any) {
-    return this.okrService.submitMyEvaluationForm(req.user.userId, body);
+    return this.okrService.submitMyEvaluationForm(req.user.id, body);
   }
 
   @Get('evaluations/submitted')

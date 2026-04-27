@@ -228,9 +228,13 @@ export class OkrService {
     okr.status = 'COMPLETED';
 
     await this.userOkrRepo.save(okr);
+
+    // 🔄 Auto-sync: Clone điểm từ OKR sang Phiếu Đánh Giá
+    await this.syncEvaluationFromOkr(okr);
+
     await this.notificationService.create(
       okr.userId,
-      `📊 OKR "${okr.objective}" đã được Trưởng khoa xem xét và duyệt: ${okr.managerScore} điểm.`,
+      `📊 OKR "${okr.objective}" đã được Trưởng khoa xem xét và duyệt: ${okr.managerScore} điểm. Phiếu Đánh Giá đã được cập nhật.`,
     );
     return okr;
   }
@@ -239,15 +243,36 @@ export class OkrService {
   // --- EVALUATION FORM: PHIẾU ĐÁNH GIÁ ---
   // ==========================================
 
-  async getMyEvaluationForm(userId: string) {
-    let form = await this.userEvaluationRepo.findOne({ 
-      where: { userId }, 
-      relations: ['user', 'user.department', 'user.managementPosition'] 
+  /**
+   * Tìm UserOkr phù hợp nhất cho user:
+   * Ưu tiên: COMPLETED (đã chốt điểm) > SUBMITTED > ACCEPTED > PENDING
+   */
+  private async findBestUserOkr(userId: string): Promise<UserOkr | null> {
+    // Ưu tiên tìm OKR đã COMPLETED (manager đã chốt điểm)
+    const completed = await this.userOkrRepo.findOne({
+      where: { userId, status: 'COMPLETED' },
+      order: { updatedAt: 'DESC' },
     });
+    if (completed) return completed;
 
-    const okr = await this.userOkrRepo.findOne({ where: { userId } });
+    // Fallback: OKR đã SUBMITTED (user đã tự khai)
+    const submitted = await this.userOkrRepo.findOne({
+      where: { userId, status: 'SUBMITTED' },
+      order: { updatedAt: 'DESC' },
+    });
+    if (submitted) return submitted;
 
-    // Cập nhật mảng cấu trúc Phần II từ OKR
+    // Fallback cuối: bất kỳ OKR nào
+    return this.userOkrRepo.findOne({
+      where: { userId },
+      order: { updatedAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Tạo evaluationData từ UserOkr — clone điểm từng Objective (A, B, C, D)
+   */
+  private buildEvaluationDataFromOkr(okr: UserOkr) {
     const evaluationData: any[] = [];
     let selfScoreTotal = 0;
     let principalScoreTotal = 0;
@@ -255,21 +280,43 @@ export class OkrService {
     if (okr && okr.keyResults && Array.isArray(okr.keyResults)) {
       for (const obj of okr.keyResults) {
         const selfScore = this.calcSingleObjectiveScore(obj, okr.selfReportData || {});
-        // Nếu manager đã duyệt OKR thì lấy điểm mgr, nều chưa thì = 0
-        const mgrScore = okr.managerReportData ? this.calcSingleObjectiveScore(obj, okr.managerReportData) : 0;
-        
+        // Nếu manager đã duyệt OKR (COMPLETED) thì lấy điểm manager, nếu chưa thì = 0
+        const mgrScore = okr.managerReportData
+          ? this.calcSingleObjectiveScore(obj, okr.managerReportData)
+          : 0;
+
         evaluationData.push({
           id: obj.id,
           name: obj.title,
           maxScore: obj.maxScore,
           selfScore: selfScore,
-          principalScore: mgrScore
+          principalScore: mgrScore,
         });
-        
+
         selfScoreTotal += selfScore;
         principalScoreTotal += mgrScore;
       }
     }
+
+    return { evaluationData, selfScoreTotal, principalScoreTotal };
+  }
+
+  async getMyEvaluationForm(userId: string) {
+    let form = await this.userEvaluationRepo.findOne({
+      where: { userId },
+      relations: ['user', 'user.department', 'user.managementPosition'],
+    });
+
+    // Tìm UserOkr phù hợp nhất (ưu tiên COMPLETED)
+    const okr = await this.findBestUserOkr(userId);
+
+    // Build evaluationData từ OKR Template đã giao cho user
+    const { evaluationData, selfScoreTotal, principalScoreTotal } = okr
+      ? this.buildEvaluationDataFromOkr(okr)
+      : { evaluationData: [], selfScoreTotal: 0, principalScoreTotal: 0 };
+
+    // Lưu tên OKR/Template để FE hiển thị
+    const okrObjectiveName = okr?.objective || '';
 
     if (!form) {
       form = this.userEvaluationRepo.create({
@@ -277,29 +324,45 @@ export class OkrService {
         status: 'PENDING_EVALUATION',
         evaluationData,
         selfScoreTotal,
-        principalScoreTotal
+        principalScoreTotal,
       });
       await this.userEvaluationRepo.save(form);
+
+      // Reload với relations
+      form = await this.userEvaluationRepo.findOne({
+        where: { id: form.id },
+        relations: ['user', 'user.department', 'user.managementPosition'],
+      });
     } else {
+      // Luôn cập nhật evaluationData mới nhất từ OKR
       form.evaluationData = evaluationData;
       form.selfScoreTotal = selfScoreTotal;
       form.principalScoreTotal = principalScoreTotal;
       await this.userEvaluationRepo.save(form);
     }
 
-    return form;
+    // Attach thêm thông tin để FE hiển thị
+    return {
+      ...form,
+      okrObjectiveName,
+      okrStatus: okr?.status || null,
+    };
   }
 
   async submitMyEvaluationForm(userId: string, body: any) {
     const form = await this.getMyEvaluationForm(userId);
     if (!form) throw new NotFoundException('Evaluation Form not found');
 
-    form.selfComment = body.selfComment;
-    form.selfRating = body.selfRating;
-    form.status = 'SUBMITTED';
+    // Cập nhật phần tự nhận xét
+    const entity = await this.userEvaluationRepo.findOne({ where: { userId } });
+    if (!entity) throw new NotFoundException('Evaluation Form not found');
 
-    await this.userEvaluationRepo.save(form);
-    return form;
+    entity.selfComment = body.selfComment;
+    entity.selfRating = body.selfRating;
+    entity.status = 'SUBMITTED';
+
+    await this.userEvaluationRepo.save(entity);
+    return entity;
   }
 
   async getSubmittedEvaluations() {
@@ -319,6 +382,38 @@ export class OkrService {
 
     await this.userEvaluationRepo.save(form);
     return form;
+  }
+
+  /**
+   * Auto-sync: Khi manager chốt điểm OKR → tự động cập nhật UserEvaluation
+   * Đây là trigger chính để clone điểm từ OKR Template sang Phiếu Đánh Giá
+   */
+  private async syncEvaluationFromOkr(okr: UserOkr) {
+    const { evaluationData, selfScoreTotal, principalScoreTotal } =
+      this.buildEvaluationDataFromOkr(okr);
+
+    let form = await this.userEvaluationRepo.findOne({
+      where: { userId: okr.userId },
+    });
+
+    if (!form) {
+      form = this.userEvaluationRepo.create({
+        userId: okr.userId,
+        status: 'PENDING_EVALUATION',
+        evaluationData,
+        selfScoreTotal,
+        principalScoreTotal,
+      });
+    } else {
+      // Chỉ cập nhật nếu phiếu chưa bị EVALUATED (manager chưa xếp loại cuối)
+      if (form.status !== 'EVALUATED') {
+        form.evaluationData = evaluationData;
+        form.selfScoreTotal = selfScoreTotal;
+        form.principalScoreTotal = principalScoreTotal;
+      }
+    }
+
+    await this.userEvaluationRepo.save(form);
   }
 
 }

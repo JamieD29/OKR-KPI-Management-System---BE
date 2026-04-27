@@ -13,6 +13,12 @@ export class OkrTemplateController {
     return this.okrTemplateService.findAll();
   }
 
+  // Trả về danh sách Chức danh nghề nghiệp (enum từ DB)
+  @Get('job-titles')
+  getJobTitles() {
+    return this.okrTemplateService.getJobTitles();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.okrTemplateService.findOne(id);
@@ -36,7 +42,7 @@ export class OkrTemplateController {
   @Post(':id/apply')
   applyTemplate(
     @Param('id') id: string,
-    @Body() applyDto: { userId: string; cycleId: string; deadline?: Date },
+    @Body() applyDto: { userIds: string[]; cycleId: string; deadline?: Date },
   ) {
     return this.okrTemplateService.applyTemplate(id, applyDto);
   }
