@@ -204,7 +204,27 @@ export class UsersService {
   }
 
   // ======================================================
-  // 8. REMOVE: Xóa User
+  // 8. FIND BY ROLE: Lọc users theo chức vụ + chức danh nghề nghiệp
+  // ======================================================
+  async findByRole(positionId?: string, jobTitle?: string) {
+    const where: any = {};
+
+    if (positionId) {
+      where.managementPosition = { id: positionId };
+    }
+    if (jobTitle) {
+      where.jobTitle = jobTitle;
+    }
+
+    return this.userRepository.find({
+      where,
+      relations: ['roles', 'department', 'managementPosition'],
+      order: { name: 'ASC' },
+    });
+  }
+
+  // ======================================================
+  // 9. REMOVE: Xóa User
   // ======================================================
   async remove(id: string) {
     const user = await this.findOne(id);

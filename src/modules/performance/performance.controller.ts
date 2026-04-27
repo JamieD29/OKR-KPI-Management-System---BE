@@ -13,9 +13,10 @@ export class PerformanceController {
 
   // Tạo kỳ đánh giá mới
   @Post('admin/cycles')
-  async createCycle(@Body() body: { name: string; startDate: string; endDate: string }) {
+  async createCycle(@Body() body: { name: string; type: string; startDate: string; endDate: string }) {
     return this.performanceService.createCycle(
       body.name,
+      body.type,
       new Date(body.startDate),
       new Date(body.endDate),
     );

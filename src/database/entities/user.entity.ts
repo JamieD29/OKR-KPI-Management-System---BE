@@ -29,15 +29,12 @@ export enum Degree {
 }
 
 export enum JobTitle {
-  DEAN = 'Trưởng khoa',
-  VICE_DEAN = 'Phó khoa',
-  HEAD_DEPT = 'Trưởng bộ môn',
   LECTURER = 'Giảng viên',
   SENIOR_LECTURER = 'Giảng viên chính',
-  ASSISTANT = 'Trợ giảng',
   SPECIALIST = 'Chuyên viên',
-  STAFF = 'Giáo vụ',
   RESEARCHER = 'Nghiên cứu viên',
+  ASSISTANT = 'Trợ giảng',
+  STAFF = 'Giáo vụ',
   TECHNICIAN = 'Kỹ thuật viên',
   SUPPORT_STAFF = 'Nhân viên hỗ trợ',
 }

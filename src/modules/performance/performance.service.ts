@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import {
   EvaluationCycle,
   EvaluationStatus,
+  CycleType,
 } from '../../database/entities/performance/evaluation-cycle.entity';
 
 @Injectable()
@@ -20,9 +21,10 @@ export class PerformanceService {
   }
 
   // Tạo kỳ đánh giá mới
-  async createCycle(name: string, startDate: Date, endDate: Date) {
+  async createCycle(name: string, type: string, startDate: Date, endDate: Date) {
     const newCycle = this.cycleRepo.create({
       name,
+      type: (type as CycleType) || CycleType.OTHER,
       startDate,
       endDate,
       status: EvaluationStatus.OPEN,

@@ -13,6 +13,12 @@ export enum EvaluationStatus {
   ARCHIVED = 'ARCHIVED', // Lưu trữ
 }
 
+export enum CycleType {
+  SEMESTER = 'SEMESTER',
+  QUARTER = 'QUARTER',
+  OTHER = 'OTHER',
+}
+
 @Entity('evaluation_cycles')
 export class EvaluationCycle {
   @PrimaryGeneratedColumn('uuid')
@@ -23,6 +29,9 @@ export class EvaluationCycle {
 
   @Column({ type: 'enum', enum: EvaluationStatus, default: EvaluationStatus.OPEN })
   status: EvaluationStatus;
+
+  @Column({ type: 'enum', enum: CycleType, default: CycleType.OTHER })
+  type: CycleType;
 
   @Column({ type: 'date', nullable: true })
   startDate: Date;

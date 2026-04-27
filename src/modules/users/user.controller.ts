@@ -37,6 +37,17 @@ export class UsersController {
   }
 
   // ==========================================
+  // 👇 API LỌC USER THEO CHỨC VỤ + CHỨC DANH
+  // ==========================================
+  @Get('filter-by-role')
+  async findByRole(
+    @Query('positionId') positionId?: string,
+    @Query('jobTitle') jobTitle?: string,
+  ) {
+    return this.usersService.findByRole(positionId, jobTitle);
+  }
+
+  // ==========================================
   // 👇 CÁC API DÀNH CHO ADMIN PORTAL
   // ==========================================
 
