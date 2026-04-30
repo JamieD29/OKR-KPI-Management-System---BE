@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { AllowedDomain } from './entities/allowed-domain.entity';
 import { Role } from './entities/role.entity';
+import { Department } from './entities/department.entity';
 
 @Injectable()
 export class DatabaseSeederService implements OnModuleInit {
@@ -13,6 +14,8 @@ export class DatabaseSeederService implements OnModuleInit {
     private domainRepository: Repository<AllowedDomain>,
     @InjectRepository(Role)
     private roleRepository: Repository<Role>,
+    @InjectRepository(Department)
+    private departmentRepository: Repository<Department>,
     private dataSource: DataSource,
   ) {}
 
@@ -20,6 +23,7 @@ export class DatabaseSeederService implements OnModuleInit {
     await this.runMigrations();
     await this.seedRoles();
     await this.seedDomains();
+    await this.seedDepartments();
   }
 
   private async runMigrations() {
@@ -49,7 +53,7 @@ export class DatabaseSeederService implements OnModuleInit {
     }
   }
 
-  private async seedRoles() {
+  public async seedRoles() {
     const count = await this.roleRepository.count();
     if (count > 0) return;
 
@@ -68,7 +72,7 @@ export class DatabaseSeederService implements OnModuleInit {
     }
   }
 
-  private async seedDomains() {
+  public async seedDomains() {
     const count = await this.domainRepository.count();
     if (count > 0) return;
 
@@ -82,5 +86,61 @@ export class DatabaseSeederService implements OnModuleInit {
         this.logger.log(`  ✅ Added domain: ${domain}`);
       }
     }
+  }
+
+  public async seedDepartments() {
+    const count = await this.departmentRepository.count();
+    if (count > 0) return;
+
+    this.logger.log('🌱 Seeding default departments...');
+    const defaultDepts = [
+      { name: 'Công nghệ phần mềm', code: 'CNPM', description: 'Khoa CNTT' },
+      { name: 'Công nghệ tri thức', code: 'CNTT', description: 'Khoa CNTT' },
+      { name: 'Hệ thống thông tin', code: 'HTTT', description: 'Khoa CNTT' },
+      { name: 'Khoa học máy tính', code: 'KHMT', description: 'Khoa CNTT' },
+      { name: 'Mạng máy tính và Viễn thông', code: 'MMT', description: 'Khoa CNTT' },
+      { name: 'Thị giác máy tính và điều khiển học thông minh', code: 'TGMT', description: 'Khoa CNTT' },
+    ];
+
+    for (const dept of defaultDepts) {
+      const exists = await this.departmentRepository.findOne({ where: { code: dept.code } });
+      if (!exists) {
+        await this.departmentRepository.save(this.departmentRepository.create(dept));
+        this.logger.log(`  ✅ Added department: ${dept.name}`);
+      }
+    }
+  }
+
+  // Khôi phục cài đặt gốc toàn hệ thống
+  public async factoryReset() {
+    this.logger.warn('⚠️ KÍCH HOẠT FACTORY RESET: Hệ thống đang xóa dữ liệu...');
+    
+    // Xóa sạch mọi bảng trừ migration (nếu có)
+    await this.dataSource.query(`
+      TRUNCATE TABLE 
+        key_results, 
+        objectives, 
+        user_okrs, 
+        okr_templates, 
+        evaluation_cycles, 
+        system_logs, 
+        notifications, 
+        user_roles, 
+        users, 
+        roles, 
+        departments, 
+        management_positions,
+        allowed_domains 
+      CASCADE;
+    `);
+
+    this.logger.log('✅ Xóa sạch dữ liệu thành công. Đang tiến hành nạp lại dữ liệu mặc định...');
+    
+    // Nạp lại cấu hình nền
+    await this.seedRoles();
+    await this.seedDomains();
+    await this.seedDepartments();
+    
+    this.logger.log('🚀 HOÀN TẤT FACTORY RESET!');
   }
 }

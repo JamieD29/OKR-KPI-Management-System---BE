@@ -215,6 +215,7 @@ erDiagram
     evaluation_cycles {
         UUID id PK
         VARCHAR name
+        ENUM type
         ENUM status
         DATE startDate
         DATE endDate
@@ -248,6 +249,8 @@ erDiagram
         JSONB proposedChanges
         TIMESTAMP deadline
         JSONB selfReportData
+        JSONB managerReportData
+        FLOAT managerScore
         TIMESTAMP createdAt
         TIMESTAMP updatedAt
     }
