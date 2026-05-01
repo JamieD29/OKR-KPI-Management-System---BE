@@ -54,6 +54,7 @@ export class OkrService {
   async getMyOkrs(userId: string) {
     return this.userOkrRepo.find({
       where: { userId },
+      relations: ['cycle'],
       order: { createdAt: 'DESC' },
     });
   }
@@ -73,12 +74,58 @@ export class OkrService {
     return this.userOkrRepo.save(okr);
   }
 
-  async negotiateOkr(id: string, userId: string, proposedChanges: any) {
-    const okr = await this.userOkrRepo.findOne({ where: { id, userId }, relations: ['user'] });
+  async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
+    const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
 
-    okr.status = 'NEGOTIATING';
-    okr.proposedChanges = proposedChanges;
+    const changes = okr.proposedChanges || {};
+    if (!changes[itemId]) {
+      changes[itemId] = [];
+    }
+
+    changes[itemId].push({
+      sender,
+      message,
+      createdAt: new Date().toISOString()
+    });
+
+    okr.proposedChanges = changes;
+    
+    if (sender === 'USER') {
+      okr.status = 'NEGOTIATING';
+    } else {
+      okr.status = 'PENDING';
+    }
+
+    await this.userOkrRepo.save(okr);
+    return okr;
+  }
+
+  async updateItemProperties(id: string, itemId: string, updates: any) {
+    const okr = await this.userOkrRepo.findOne({ where: { id } });
+    if (!okr) throw new NotFoundException('OKR not found');
+
+    const updateRecursive = (items: any[]) => {
+      if (!items) return false;
+      for (const item of items) {
+        if (item.id === itemId) {
+          if (updates.maxScore !== undefined) item.maxScore = updates.maxScore;
+          if (updates.unitScore !== undefined) item.unitScore = updates.unitScore;
+          return true;
+        }
+        if (item.items && updateRecursive(item.items)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    if (okr.keyResults) {
+      updateRecursive(okr.keyResults);
+      // Recalculate if necessary, but maxScore is just a structural thing
+      // until self-report happens.
+    }
+
     await this.userOkrRepo.save(okr);
     return okr;
   }
@@ -88,10 +135,8 @@ export class OkrService {
     if (!okr) throw new NotFoundException('OKR not found');
 
     okr.status = 'ACCEPTED';
-    if (okr.proposedChanges) {
-      okr.keyResults = okr.proposedChanges;
-      okr.proposedChanges = null;
-    }
+    // KHÔNG ghi đè proposedChanges vào keyResults nữa vì cấu trúc đã khác
+    // okr.proposedChanges = null; // Có thể giữ lại lịch sử chat hoặc xóa đi tuỳ ý. Tạm thời giữ lại để làm minh chứng.
 
     await this.userOkrRepo.save(okr);
     await this.notificationService.create(
