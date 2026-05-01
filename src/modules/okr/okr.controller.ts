@@ -34,9 +34,18 @@ export class OkrController {
     return this.okrService.acceptOkr(id, req.user.id || req.user.sub);
   }
 
-  @Put(':id/negotiate')
-  async negotiateOkr(@Param('id') id: string, @Body() body: any, @Request() req: any) {
-    return this.okrService.negotiateOkr(id, req.user.id || req.user.sub, body.proposedChanges);
+  @Post(':id/chat')
+  async chatItem(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    // Body should contain { itemId: string, message: string, sender?: 'USER' | 'MANAGER' }
+    // Note: in a real app we might determine sender from role, but here we can pass it or infer it
+    const sender = body.sender || 'USER'; 
+    return this.okrService.chatItem(id, body.itemId, sender, body.message);
+  }
+
+  @Put(':id/edit-item')
+  async editItemProperties(@Param('id') id: string, @Body() body: any) {
+    // Body: { itemId: string, updates: { maxScore?: number, unitScore?: number } }
+    return this.okrService.updateItemProperties(id, body.itemId, body.updates);
   }
 
   @Put(':id/dean-approve')
