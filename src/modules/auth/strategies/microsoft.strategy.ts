@@ -11,14 +11,19 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
     private configService: ConfigService,
     private authService: AuthService,
   ) {
+    const tenant = configService.get<string>('MICROSOFT_TENANT_ID') || 'common';
     super({
-      // Thêm || '' để TypeScript không báo lỗi undefined
       clientID: configService.get<string>('MICROSOFT_CLIENT_ID') || '',
       clientSecret: configService.get<string>('MICROSOFT_CLIENT_SECRET') || '',
       callbackURL:
         configService.get<string>('MICROSOFT_CALLBACK_URL') ||
         'http://localhost:3000/auth/microsoft/callback',
-      scope: ['user.read'],
+      scope: ['user.read', 'email', 'profile', 'openid'],
+      // 👈 Cưỡng bức sử dụng URL theo Tenant ID để tránh lỗi /common
+      authorizationURL: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,
+      tokenURL: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`,
+      pkce: true, // 👈 BẬT PKCE
+      state: true, // 👈 BẬT STATE (Yêu cầu phải có session ở main.ts)
     });
   }
 
@@ -28,12 +33,22 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
     profile: any,
     done: Function,
   ): Promise<any> {
-    const { name, emails, id } = profile;
+    const { name, emails, id, _json } = profile;
+
+    // Trích xuất email an toàn
+    const email =
+      (emails && emails.length > 0 && emails[0].value) ||
+      _json?.mail ||
+      _json?.userPrincipalName;
+
+    if (!email) {
+      return done(new Error('Cannot retrieve email from Microsoft account'), false);
+    }
 
     const user = {
-      email: emails[0].value,
-      name: `${name.givenName} ${name.familyName}`,
-      avatar: null, // Bây giờ AuthService đã chấp nhận null nên dòng này OK
+      email: email,
+      name: name ? `${name.givenName} ${name.familyName}` : _json?.displayName || 'Unknown',
+      avatar: null,
       providerId: id,
       provider: 'microsoft' as const,
     };
