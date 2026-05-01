@@ -1,10 +1,24 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import session from 'express-session';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  // 👈 THÊM SESSION ĐỂ HỖ TRỢ PKCE CHO MICROSOFT LOGIN
+  app.use(
+    session({
+      secret: process.env.JWT_SECRET || 'my-secret', // Dùng chung secret key hoặc key khác tùy bạn
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        secure: false, // Để false nếu chạy localhost (http)
+        maxAge: 3600000, // 1 giờ
+      },
+    }),
+  );
 
   // --- BẮT ĐẦU ĐOẠN CẦN THÊM ---
   app.useGlobalPipes(
