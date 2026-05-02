@@ -4,6 +4,12 @@ import { Repository, DataSource } from 'typeorm';
 import { AllowedDomain } from './entities/allowed-domain.entity';
 import { Role } from './entities/role.entity';
 import { Department } from './entities/department.entity';
+import {
+  AcademicRank,
+  Degree,
+  JobTitle,
+  Gender,
+} from './entities/user.entity';
 
 @Injectable()
 export class DatabaseSeederService implements OnModuleInit {
@@ -53,46 +59,50 @@ export class DatabaseSeederService implements OnModuleInit {
     }
   }
 
-  public async seedRoles() {
-    const count = await this.roleRepository.count();
-    if (count > 0) return;
+  // ============================================================
+  // SEED PATTERN: "Ensure Defaults Exist"
+  // → Luôn kiểm tra từng record mặc định, tạo mới nếu thiếu.
+  // → Không skip toàn bộ khi bảng đã có dữ liệu.
+  // ============================================================
 
-    this.logger.log('🌱 Seeding default roles...');
+  public async seedRoles() {
     const defaultRoles = [
       { name: 'Admin', slug: 'ADMIN', description: 'Quản trị viên hệ thống' },
       { name: 'User', slug: 'USER', description: 'Người dùng hệ thống' },
     ];
 
+    let created = 0;
     for (const role of defaultRoles) {
       const exists = await this.roleRepository.findOne({ where: { slug: role.slug } });
       if (!exists) {
         await this.roleRepository.save(this.roleRepository.create(role));
         this.logger.log(`  ✅ Created role: ${role.name} (${role.slug})`);
+        created++;
       }
+    }
+    if (created > 0) {
+      this.logger.log(`🌱 Seeded ${created} missing role(s).`);
     }
   }
 
   public async seedDomains() {
-    const count = await this.domainRepository.count();
-    if (count > 0) return;
+    const defaultDomains = ['gmail.com', 'itec.hcmus.edu.vn', 'student.hcmus.edu.vn'];
 
-    this.logger.log('🌱 Seeding default allowed domains...');
-    const defaultDomains = ['gmail.com', 'itec.hcmus.edu.vn'];
-
+    let created = 0;
     for (const domain of defaultDomains) {
       const exists = await this.domainRepository.findOne({ where: { domain } });
       if (!exists) {
         await this.domainRepository.save(this.domainRepository.create({ domain }));
         this.logger.log(`  ✅ Added domain: ${domain}`);
+        created++;
       }
+    }
+    if (created > 0) {
+      this.logger.log(`🌱 Seeded ${created} missing domain(s).`);
     }
   }
 
   public async seedDepartments() {
-    const count = await this.departmentRepository.count();
-    if (count > 0) return;
-
-    this.logger.log('🌱 Seeding default departments...');
     const defaultDepts = [
       { name: 'Công nghệ phần mềm', code: 'CNPM', description: 'Khoa CNTT' },
       { name: 'Công nghệ tri thức', code: 'CNTT', description: 'Khoa CNTT' },
@@ -102,16 +112,54 @@ export class DatabaseSeederService implements OnModuleInit {
       { name: 'Thị giác máy tính và điều khiển học thông minh', code: 'TGMT', description: 'Khoa CNTT' },
     ];
 
+    let created = 0;
     for (const dept of defaultDepts) {
       const exists = await this.departmentRepository.findOne({ where: { code: dept.code } });
       if (!exists) {
         await this.departmentRepository.save(this.departmentRepository.create(dept));
         this.logger.log(`  ✅ Added department: ${dept.name}`);
+        created++;
       }
+    }
+    if (created > 0) {
+      this.logger.log(`🌱 Seeded ${created} missing department(s).`);
     }
   }
 
-  // Khôi phục cài đặt gốc toàn hệ thống
+  // ============================================================
+  // SINGLE SOURCE OF TRUTH: Profile Enum Options
+  // → FE gọi API này thay vì hardcode danh sách.
+  // → Khi cần thêm/sửa giá trị, chỉ cần sửa enum ở user.entity.ts
+  // ============================================================
+
+  public getProfileOptions() {
+    return {
+      jobTitles: Object.entries(JobTitle).map(([key, value]) => ({
+        value,
+        label: value,
+        key,
+      })),
+      academicRanks: Object.entries(AcademicRank).map(([key, value]) => ({
+        value,
+        label: key === 'NONE' ? 'Không có học hàm' : value,
+        key,
+      })),
+      degrees: Object.entries(Degree).map(([key, value]) => ({
+        value,
+        label: value,
+        key,
+      })),
+      genders: Object.entries(Gender).map(([key, value]) => ({
+        value,
+        label: value,
+        key,
+      })),
+    };
+  }
+
+  // ============================================================
+  // FACTORY RESET: Khôi phục cài đặt gốc toàn hệ thống
+  // ============================================================
   public async factoryReset() {
     this.logger.warn('⚠️ KÍCH HOẠT FACTORY RESET: Hệ thống đang xóa dữ liệu...');
     
