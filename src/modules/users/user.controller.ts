@@ -13,6 +13,7 @@ import {
 import { UsersService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DatabaseSeederService } from '../../database/database-seeder.service';
 
 // 👇 IMPORT THÊM ĐỂ PHÂN QUYỀN (Check kỹ đường dẫn nhé)
 import { Roles } from '../auth/decorators/role.decorator';
@@ -24,7 +25,19 @@ import { PermissionLevel } from '../../database/entities/management-position.ent
 // 👇 Thêm RolesGuard vào đây để nó check quyền cho các hàm bên dưới
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly seederService: DatabaseSeederService,
+  ) {}
+
+  // ==========================================
+  // 👇 SINGLE SOURCE OF TRUTH: Profile Enum Options
+  // FE gọi endpoint này thay vì hardcode danh sách
+  // ==========================================
+  @Get('profile-options')
+  getProfileOptions() {
+    return this.seederService.getProfileOptions();
+  }
 
   @Get('profile')
   getProfile(@Req() req) {
