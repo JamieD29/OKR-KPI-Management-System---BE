@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { OkrTemplate } from '../../database/entities/performance/okr-template.entity';
 import { UserOkr } from '../../database/entities/performance/user-okr.entity';
 import { User, JobTitle } from '../../database/entities/user.entity';
-import { NotificationService } from '../notification/notification.service';
+import { Notification } from '../../database/entities/notification.entity';
 
 @Injectable()
 export class OkrTemplateService {
@@ -15,7 +15,9 @@ export class OkrTemplateService {
     private userOkrRepository: Repository<UserOkr>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    private notificationService: NotificationService,
+    // private notificationService: NotificationService,
+    @InjectRepository(Notification)
+    private notificationRepository: Repository<Notification>,
   ) {}
 
   // Trả về danh sách Chức danh nghề nghiệp từ enum JobTitle
@@ -95,20 +97,27 @@ export class OkrTemplateService {
     if (!applyDto.userIds || applyDto.userIds.length === 0) {
       throw new BadRequestException('Phải chọn ít nhất 1 người để giao OKR');
     }
-
     const results: any[] = [];
+    const userOkrsList: any[] = [];
+    const deadlineStr = applyDto.deadline
+      ? ` (Deadline: ${new Date(applyDto.deadline).toLocaleDateString('vi-VN')})`
+      : '';
+    const notificationsList: any[] = []; //notification list
 
-    for (const userId of applyDto.userIds) {
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+    const users = await this.userRepository.find({ where: { id: In(applyDto.userIds) } });
+    // map users by id
+    const usersMap = new Map(users.map((user) => [user.id, user]));
+    
+    for (const uId of applyDto.userIds) {      // const user = users.find((user) => user.id === uId);
+      const user = usersMap.get(uId);
       if (!user) {
-        console.warn(`⚠️ User with ID ${userId} not found, skipping...`);
+        console.warn(`⚠️ User with ID ${uId} not found, skipping...`);
         continue;
       }
-
-      // Tạo 1 UserOkr chứa toàn bộ cấu trúc template
-      const userOkr = this.userOkrRepository.create({
+  
+      const uo = {
         user: user,
-        userId: userId,
+        userId: user.id,
         cycleId: applyDto.cycleId,
         objective: template.title,
         keyResults: template.structure,
@@ -116,20 +125,23 @@ export class OkrTemplateService {
         templateId: templateId,
         status: 'PENDING',
         deadline: applyDto.deadline,
-      });
-      const saved = await this.userOkrRepository.save(userOkr);
-      results.push(saved);
-
-      // 🔔 Gửi thông báo cho user được chỉ định
-      const deadlineStr = applyDto.deadline
-        ? ` (Deadline: ${new Date(applyDto.deadline).toLocaleDateString('vi-VN')})`
-        : '';
-      await this.notificationService.create(
-        userId,
-        `📋 Bạn đã được giao OKR mới: "${template.title}"${deadlineStr}. Vào "OKR Của Tôi" để xem chi tiết và phản hồi.`,
-      );
+      }
+      userOkrsList.push(uo);
+      
+      const notification = {
+        userId: user.id,
+        message: `📋 Bạn đã được giao OKR mới: "${template.title}"${deadlineStr}. Vào "OKR Của Tôi" để xem chi tiết và phản hồi.`,
+        isRead: false,
+      }
+      notificationsList.push(notification);
     }
+    
+    const userOkrs = this.userOkrRepository.create(userOkrsList);
+    const savedUserOkrs = await this.userOkrRepository.save(userOkrs);
 
-    return { success: true, count: results.length, data: results };
+    const notifications = this.notificationRepository.create(notificationsList);
+    await this.notificationRepository.save(notifications);
+
+    return { success: true, count: savedUserOkrs.length, data: savedUserOkrs };
   }
 }
