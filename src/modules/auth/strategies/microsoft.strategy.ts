@@ -17,7 +17,7 @@ export class MicrosoftStrategy extends PassportStrategy(Strategy, 'microsoft') {
       clientSecret: configService.get<string>('MICROSOFT_CLIENT_SECRET') || '',
       callbackURL:
         configService.get<string>('MICROSOFT_CALLBACK_URL') ||
-        'http://localhost:3000/auth/microsoft/callback',
+        'http://localhost:3001/auth/microsoft/callback',
       scope: ['user.read', 'email', 'profile', 'openid'],
       // 👈 Cưỡng bức sử dụng URL theo Tenant ID để tránh lỗi /common
       authorizationURL: `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/authorize`,

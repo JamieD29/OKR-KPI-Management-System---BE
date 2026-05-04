@@ -27,7 +27,7 @@ export class EvaluationCycle {
   @Column()
   name: string; // VD: "Học kỳ 1 - 2025-2026"
 
-  @Column({ type: 'enum', enum: EvaluationStatus, default: EvaluationStatus.OPEN })
+  @Column({ type: 'enum', enum: EvaluationStatus, default: EvaluationStatus.CLOSED })
   status: EvaluationStatus;
 
   @Column({ type: 'enum', enum: CycleType, default: CycleType.OTHER })
