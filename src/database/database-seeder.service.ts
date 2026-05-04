@@ -26,6 +26,15 @@ export class DatabaseSeederService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // Nếu bạn muốn tắt tạm thời, bạn có thể uncomment dòng dưới:
+    // return;
+
+    // Hoặc sử dụng biến môi trường (Ví dụ: RUN_SEEDER=false trong file .env)
+    if (process.env.RUN_SEEDER === 'false') {
+      this.logger.log('Seeder is disabled via environment variable RUN_SEEDER=false.');
+      return;
+    }
+
     await this.runMigrations();
     await this.seedRoles();
     await this.seedDomains();
