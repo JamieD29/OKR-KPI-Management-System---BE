@@ -1,8 +1,4 @@
-# API Summary
-
-Tài liệu API của hệ thống OKR/KPI Management. Mỗi endpoint có 1 file `.md` riêng trong folder tương ứng với module.
-
-> Các điểm yếu / lỗ hổng / TODO của codebase được tách riêng sang [`security-issues.md`](./security-issues.md).
+# API Specification
 
 ## Auth (`api-document/auth/`)
 
