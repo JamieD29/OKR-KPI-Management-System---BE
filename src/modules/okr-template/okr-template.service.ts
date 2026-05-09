@@ -48,16 +48,36 @@ export class OkrTemplateService {
     return template;
   }
 
+  private validateScoresRecursively(items: any[], isObjective: boolean = false): number {
+    let totalScore = 0;
+    for (const item of items) {
+      const maxScore = Number(item.maxScore) || 0;
+      if (maxScore < 0) {
+        throw new BadRequestException(`Điểm số của "${item.title || item.id}" không được là số âm.`);
+      }
+      totalScore += maxScore;
+
+      if (item.items && item.items.length > 0) {
+        const childrenTotal = this.validateScoresRecursively(item.items);
+        if (childrenTotal > maxScore) {
+          throw new BadRequestException(`Tổng điểm các mục con (${childrenTotal}) không được vượt quá điểm của mục "${item.title || item.id}" (${maxScore}).`);
+        }
+      } else if (isObjective) {
+        throw new BadRequestException(`Mục tiêu lớn "${item.title || item.id}" phải có ít nhất 1 Kết quả then chốt (KR).`);
+      }
+    }
+    return totalScore;
+  }
+
   private validateTemplateStructure(structure?: any[]) {
-    if (!structure || structure.length === 0) return;
-    
-    let totalMaxScore = 0;
-    for (const obj of structure) {
-      totalMaxScore += Number(obj.maxScore) || 0;
+    if (!structure || structure.length === 0) {
+      throw new BadRequestException('Template phải có ít nhất 1 Mục tiêu (Objective).');
     }
     
+    const totalMaxScore = this.validateScoresRecursively(structure, true);
+    
     if (totalMaxScore !== 100) {
-      throw new BadRequestException(`Tổng điểm (maxScore) của tất cả các Nhiệm vụ phải chính xác bằng 100. Hiện tại đang là ${totalMaxScore}.`);
+      throw new BadRequestException(`Tổng điểm (maxScore) của tất cả các Nhiệm vụ (Objective) phải chính xác bằng 100. Hiện tại đang là ${totalMaxScore}.`);
     }
   }
 
