@@ -130,6 +130,21 @@ export class OkrService {
     return okr;
   }
 
+  async updateOkrStructure(id: string, userId: string, keyResults: any[]) {
+    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    if (!okr) throw new NotFoundException('OKR not found');
+    
+    if (okr.status !== 'PENDING' && okr.status !== 'NEGOTIATING') {
+      throw new BadRequestException('Chỉ có thể thay đổi cấu trúc khi đang đàm phán.');
+    }
+
+    okr.keyResults = keyResults;
+    okr.status = 'NEGOTIATING';
+    
+    await this.userOkrRepo.save(okr);
+    return okr;
+  }
+
   async approveOkr(id: string) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
