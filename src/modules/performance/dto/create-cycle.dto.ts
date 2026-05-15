@@ -11,7 +11,7 @@ export class CreateCycleDto {
   @ApiPropertyOptional({
     enum: CycleType,
     description:
-      'Loại kỳ. Bỏ trống hoặc chuỗi rỗng → service dùng `OTHER` (xem `createCycle`).',
+      'Loại kỳ. Bỏ trống hoặc chuỗi rỗng → service dùng *OTHER*.',
   })
   @IsOptional()
   @IsEnum(CycleType)
@@ -28,7 +28,7 @@ export class CreateCycleDto {
   @ApiProperty({
     format: 'date',
     example: '2026-01-31',
-    description: 'Phải sau `startDate` (validation trong service).',
+    description: 'Phải sau **startDate** (validation trong service).',
   })
   @IsDateString()
   endDate: string;

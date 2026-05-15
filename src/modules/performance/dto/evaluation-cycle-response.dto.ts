@@ -4,7 +4,7 @@ import {
   CycleType,
 } from '../../../database/entities/performance/evaluation-cycle.entity';
 
-/** Bản ghi `EvaluationCycle` trả về API. */
+/** Bản ghi EvaluationCycle trả về API. */
 export class EvaluationCycleSwaggerDto {
   @ApiProperty({ format: 'uuid' })
   id: string;
@@ -39,7 +39,8 @@ export class ToggleCycleStatusResponseDto {
   cycle: EvaluationCycleSwaggerDto;
 
   @ApiProperty({
-    description: '`true` nếu `endDate` (chỉnh về 00:00) nhỏ hơn hôm nay — FE có thể cảnh báo.',
+    description:
+      '*true* nếu **endDate** (coi về 00:00) nhỏ hơn hôm nay — FE có thể cảnh báo.',
   })
   isPast: boolean;
 }

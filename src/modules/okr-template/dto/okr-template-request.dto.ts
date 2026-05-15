@@ -20,13 +20,13 @@ export class CreateOkrTemplateDto {
   @IsUUID('4')
   departmentId?: string;
 
-  @ApiPropertyOptional({ format: 'uuid', description: '`management_positions.id`.' })
+  @ApiPropertyOptional({ format: 'uuid', description: 'UUID **management_positions.id**.' })
   @IsOptional()
   @IsUUID('4')
   positionId?: string;
 
   @ApiPropertyOptional({
-    description: 'Chức danh nghề nghiệp (chuỗi enum `JobTitle`, tiếng Việt).',
+    description: 'Chức danh nghề nghiệp (chuỗi enum **JobTitle**, tiếng Việt).',
   })
   @IsOptional()
   @IsString()
@@ -51,7 +51,7 @@ export class CreateOkrTemplateDto {
     type: 'array',
     items: { type: 'object', additionalProperties: true },
     description:
-      'Cây nhiệm vụ (JSON). Nếu có phần tử: **tổng `maxScore` gốc phải = 100** (validate service).',
+      'Cây nhiệm vụ (JSON). Nếu có phần tử: **tổng maxScore ở gốc phải = 100** (validate service).',
   })
   @IsOptional()
   @IsArray()
@@ -71,7 +71,7 @@ export class ApplyTemplateDto {
   @IsUUID('4', { each: true })
   userIds: string[];
 
-  @ApiProperty({ format: 'uuid', description: '`evaluation_cycles.id`.' })
+  @ApiProperty({ format: 'uuid', description: 'UUID **evaluation_cycles.id**.' })
   @IsUUID('4')
   cycleId: string;
 

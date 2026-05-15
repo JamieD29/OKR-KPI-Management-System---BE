@@ -12,10 +12,10 @@ export class ProfileEnumOptionDto {
   @ApiProperty({ description: 'Giá trị lưu DB / gửi API (tiếng Việt từ enum entity).' })
   value: string;
 
-  @ApiProperty({ description: 'Nhãn hiển thị (thường trùng `value`, trừ academicRank key NONE).' })
+  @ApiProperty({ description: 'Nhãn hiển thị (thường trùng **value**, trừ học hàm NONE).' })
   label: string;
 
-  @ApiProperty({ description: 'Tên khóa enum TypeScript (vd `LECTURER`).' })
+  @ApiProperty({ description: 'Tên khóa enum TypeScript (ví dụ *LECTURER*).' })
   key: string;
 }
 
@@ -85,8 +85,8 @@ export class ManagementPositionSwaggerDto {
 }
 
 /**
- * User đầy đủ như `UsersService.findOne` / `findAll` / `findByRole` (relations:
- * roles, department, managementPosition).
+ * User đầy đủ như các thao tác findOne / findAll / findByRole (kèm roles, department,
+ * managementPosition).
  */
 export class UserDetailSwaggerDto {
   @ApiProperty({ format: 'uuid' })
@@ -100,7 +100,7 @@ export class UserDetailSwaggerDto {
 
   @ApiPropertyOptional({
     nullable: true,
-    description: 'URL ảnh đại diện (cột `avatar_url`).',
+    description: 'URL ảnh đại diện (cột **avatar_url**).',
   })
   avatarUrl?: string | null;
 

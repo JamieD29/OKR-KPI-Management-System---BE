@@ -21,7 +21,7 @@ export class SystemLogItemDto {
     nullable: true,
     type: SystemLogUserBriefDto,
     description:
-      'Người thực hiện. `null` nếu không gán hoặc user đã xóa (`SET NULL`). Payload có thể chứa thêm quan hệ từ `User` (eager).',
+      'Người thực hiện. **null** nếu không gán hoặc user đã xóa (DB set null). Có thể kèm quan hệ **User** tải sẵn.',
   })
   user?: SystemLogUserBriefDto | null;
 
@@ -38,7 +38,7 @@ export class SystemLogItemDto {
     nullable: true,
     type: 'object',
     additionalProperties: true,
-    description: 'JSON chi tiết (vd `old`/`new`) từ cột `jsonb`.',
+    description: 'JSON chi tiết (vd. cặp *old* / *new*) từ cột **jsonb**.',
   })
   details?: Record<string, unknown> | null;
 

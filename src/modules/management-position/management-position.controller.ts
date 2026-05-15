@@ -29,7 +29,7 @@ import {
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn.',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn.',
 })
 @Controller('management-positions')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -39,7 +39,7 @@ export class ManagementPositionController {
   @Get()
   @ApiOperation({
     summary: 'Danh sách chức vụ quản lý',
-    description: 'Mọi user đã đăng nhập. Sort `createdAt ASC`.',
+    description: 'Mọi user đã đăng nhập. Sắp **createdAt** tăng dần.',
   })
   @ApiOkResponse({
     type: ManagementPositionSwaggerDto,
@@ -61,7 +61,7 @@ export class ManagementPositionController {
   @ApiBadRequestResponse({ description: 'Validation DTO.' })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
   @ApiConflictResponse({
-    description: '`Chức vụ với slug "..." đã tồn tại`.',
+    description: '*Chức vụ với slug "..." đã tồn tại*.',
   })
   @ApiInternalServerErrorResponse()
   create(@Body() body: CreateManagementPositionDto) {
@@ -72,14 +72,14 @@ export class ManagementPositionController {
   @Roles(RoleType.ADMIN)
   @ApiOperation({
     summary: 'Cập nhật chức vụ (ADMIN)',
-    description: 'Nếu đổi `slug`: chuẩn hóa + kiểm tra trùng (trừ chính bản ghi).',
+    description: 'Nếu đổi **slug**: chuẩn hóa và kiểm tra trùng (trừ chính bản ghi).',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: UpdateManagementPositionDto })
   @ApiOkResponse({ type: ManagementPositionSwaggerDto })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
   @ApiNotFoundResponse({
-    description: '`Chức vụ với ID ... không tồn tại`.',
+    description: '*Chức vụ với ID … không tồn tại*.',
   })
   @ApiConflictResponse({
     description: 'Slug trùng bản ghi khác.',
@@ -94,17 +94,17 @@ export class ManagementPositionController {
   @ApiOperation({
     summary: 'Xóa chức vụ (ADMIN)',
     description:
-      '**409** nếu đang có `EvaluationCycle` với `status: OPEN`.',
+      '**409** nếu đang có **EvaluationCycle** với trạng thái **OPEN**.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: RemoveManagementPositionResponseDto })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
   @ApiNotFoundResponse({
-    description: '`Chức vụ với ID ... không tồn tại`.',
+    description: '*Chức vụ với ID … không tồn tại*.',
   })
   @ApiConflictResponse({
     description:
-      '`Không thể xóa chức vụ quản lý trong quá trình đánh giá (có kỳ đánh giá đang mở).`',
+      '*Không thể xóa chức vụ quản lý trong quá trình đánh giá (có kỳ đánh giá đang mở).*',
   })
   @ApiInternalServerErrorResponse()
   remove(@Param('id') id: string) {

@@ -19,7 +19,7 @@ import {
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn.',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn.',
 })
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
@@ -30,7 +30,7 @@ export class NotificationController {
   @ApiOperation({
     summary: 'Danh sách thông báo chưa đọc',
     description:
-      'Trả về mảng notification với `isRead: false` của user trong JWT, sort `createdAt DESC`. Có thể rỗng.',
+      'Trả về các thông báo có **isRead** là *false* của user trong JWT, sort **createdAt** giảm dần. Có thể rỗng.',
   })
   @ApiOkResponse({
     description: 'Mảng thông báo chưa đọc',
@@ -46,7 +46,7 @@ export class NotificationController {
   @ApiOperation({
     summary: 'Tất cả thông báo (giới hạn 50)',
     description:
-      '`getAll`: mọi notification của user hiện tại, `createdAt DESC`, tối đa **50** bản ghi.',
+      'Mọi thông báo của user hiện tại (**getAll**), sort **createdAt** giảm dần, tối đa **50** bản ghi.',
   })
   @ApiOkResponse({
     description: 'Tối đa 50 thông báo gần nhất',
@@ -62,7 +62,7 @@ export class NotificationController {
   @ApiOperation({
     summary: 'Đánh dấu tất cả thông báo đã đọc',
     description:
-      'Bulk update mọi bản ghi `isRead: false` của user hiện tại thành `true`.',
+      'Cập nhật hàng loạt các bản ghi **isRead** *false* thành *true*.',
   })
   @ApiOkResponse({
     description: 'Thông báo kết quả',
@@ -77,12 +77,12 @@ export class NotificationController {
   @ApiOperation({
     summary: 'Đánh dấu một thông báo đã đọc',
     description:
-      'Chỉ cập nhật khi `id` tồn tại và `userId` khớp JWT. Nếu không tìm thấy hoặc không thuộc user, **HTTP 200** với body JSON `null` (không trả 404).',
+      'Chỉ cập nhật khi **id** tồn tại và **userId** khớp JWT. Nếu không tìm thấy hoặc không thuộc user, vẫn **HTTP 200** với body **null** (không trả 404).',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'UUID notification.' })
   @ApiOkResponse({
     description:
-      'Bản ghi notification sau update (`isRead: true`), hoặc `null` trong các trường hợp trên (schema mô tả khi có object).',
+      'Bản ghi thông báo sau cập nhật (**isRead** *true*), hoặc **null** trong các trường hợp trên (schema mô tả khi có object).',
     type: NotificationItemDto,
   })
   @ApiInternalServerErrorResponse()

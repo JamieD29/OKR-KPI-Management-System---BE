@@ -76,7 +76,8 @@ export class UserOkrSwaggerDto {
   objective: string;
 
   @ApiProperty({
-    description: 'Cây Key Results (JSONB) — có thể lồng `items`, `maxScore`, `unitScore`, …',
+    description:
+      'Cây Key Results (JSONB) — có thể lồng **items**, **maxScore**, **unitScore**, …',
     type: 'array',
     items: { type: 'object', additionalProperties: true },
   })
@@ -98,7 +99,7 @@ export class UserOkrSwaggerDto {
     nullable: true,
     type: 'object',
     additionalProperties: true,
-    description: 'Chat / đề xuất chỉnh sửa theo `itemId`.',
+    description: 'Chat / đề xuất chỉnh sửa theo **itemId**.',
   })
   proposedChanges?: Record<string, unknown> | null;
 
@@ -192,7 +193,7 @@ export class MyEvaluationFormResponseDto extends UserEvaluationSwaggerDto {
 
   @ApiPropertyOptional({
     nullable: true,
-    description: 'Trạng thái `UserOkr` tương ứng (nếu có).',
+    description: 'Trạng thái **UserOkr** tương ứng (nếu có).',
   })
   okrStatus?: string | null;
 }

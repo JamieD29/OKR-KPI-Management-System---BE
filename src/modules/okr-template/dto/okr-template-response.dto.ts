@@ -61,7 +61,7 @@ export class ApplyTemplateResponseDto {
   success: boolean;
 
   @ApiProperty({
-    description: 'Số `UserOkr` tạo được (user không tồn tại bị bỏ qua, không fail cả batch).',
+    description: 'Số bản **UserOkr** tạo được (user không tồn tại bị bỏ qua, không fail cả batch).',
   })
   count: number;
 

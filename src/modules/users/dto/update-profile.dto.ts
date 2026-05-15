@@ -22,7 +22,7 @@ export class UpdateProfileDto {
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ description: 'URL ảnh đại diện (map tới cột `avatar_url`).' })
+  @ApiPropertyOptional({ description: 'URL ảnh đại diện (map tới cột **avatar_url**).' })
   @IsOptional()
   @IsString()
   avatar?: string;

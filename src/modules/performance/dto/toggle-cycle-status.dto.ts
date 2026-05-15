@@ -5,7 +5,7 @@ import { EvaluationStatus } from '../../../database/entities/performance/evaluat
 export class ToggleCycleStatusDto {
   @ApiProperty({
     enum: EvaluationStatus,
-    description: 'Trạng thái mới (`OPEN`, `CLOSED`, `ARCHIVED`, …).',
+    description: 'Trạng thái mới (*OPEN*, *CLOSED*, *ARCHIVED*, …).',
     example: EvaluationStatus.OPEN,
   })
   @IsEnum(EvaluationStatus)

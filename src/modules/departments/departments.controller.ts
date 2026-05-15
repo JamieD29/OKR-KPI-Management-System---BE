@@ -29,7 +29,7 @@ import { RoleType } from '../../common/enums/role.enum';
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn.',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn.',
 })
 @Controller('departments')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -41,7 +41,7 @@ export class DepartmentsController {
   @ApiOperation({
     summary: 'Tạo bộ môn (ADMIN)',
     description:
-      'Kiểm tra trùng `name`. Ghi `system_logs`. Trả entity department vừa lưu.',
+      'Kiểm tra trùng **name**. Ghi **system_logs**. Trả entity department vừa lưu.',
   })
   @ApiBody({ type: CreateDepartmentDto })
   @ApiOkResponse({
@@ -49,9 +49,9 @@ export class DepartmentsController {
     type: DepartmentEntityResponseDto,
   })
   @ApiBadRequestResponse({ description: 'Validation DTO (name/code/description).' })
-  @ApiForbiddenResponse({ description: 'Không có role ADMIN (`RolesGuard`).' })
+  @ApiForbiddenResponse({ description: 'Không có role ADMIN (guard vai trò).' })
   @ApiConflictResponse({
-    description: '`Tên bộ môn đã tồn tại` — trùng `name` trong DB.',
+    description: '*Tên bộ môn đã tồn tại* — trùng **name** trong DB.',
   })
   @ApiInternalServerErrorResponse({
     description: 'Lỗi DB hoặc ghi system log.',
@@ -64,7 +64,7 @@ export class DepartmentsController {
   @ApiOperation({
     summary: 'Danh sách bộ môn',
     description:
-      'Mọi user đăng nhập. Sort `name ASC`. Mỗi phần tử có `memberCount`; quan hệ `users` không xuất hiện trong JSON (đã strip).',
+      'Mọi user đăng nhập. Sort **name** tăng dần. Mỗi phần tử có **memberCount**; quan hệ **users** không xuất hiện trong JSON (đã loại bỏ).',
   })
   @ApiOkResponse({
     description: 'Danh sách department kèm số thành viên',
@@ -81,9 +81,9 @@ export class DepartmentsController {
   @ApiOperation({
     summary: 'Cập nhật bộ môn (ADMIN)',
     description:
-      'Nếu đổi `code`, kiểm tra trùng với bộ môn khác. Ghi `system_logs` (old/new).',
+      'Nếu đổi **code**, kiểm tra trùng với bộ môn khác. Ghi **system_logs** (giá trị cũ / mới).',
   })
-  @ApiParam({ name: 'id', format: 'uuid', description: '`departments.id`.' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'UUID bộ môn (**departments.id**).' })
   @ApiBody({ type: UpdateDepartmentDto })
   @ApiOkResponse({
     description: 'Department sau khi cập nhật',
@@ -91,9 +91,9 @@ export class DepartmentsController {
   })
   @ApiBadRequestResponse({ description: 'Validation DTO.' })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
-  @ApiNotFoundResponse({ description: '`Không tìm thấy bộ môn`.' })
+  @ApiNotFoundResponse({ description: '*Không tìm thấy bộ môn*.' })
   @ApiConflictResponse({
-    description: '`Mã bộ môn này đã được sử dụng` — `code` trùng bản ghi khác.',
+    description: '*Mã bộ môn này đã được sử dụng* — **code** trùng bản ghi khác.',
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB hoặc system log.' })
   update(
@@ -109,15 +109,15 @@ export class DepartmentsController {
   @ApiOperation({
     summary: 'Xóa bộ môn (ADMIN)',
     description:
-      'Gỡ `department` khỏi mọi user thuộc bộ môn (`department = null`) rồi xóa bản ghi. Ghi `system_logs`.',
+      'Gỡ liên kết bộ môn khỏi mọi user thuộc bộ môn đó (**department** đặt *null*) rồi xóa bản ghi. Ghi **system_logs**.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({
-    description: 'Entity department vừa xóa (TypeORM `remove`).',
+    description: 'Entity department vừa xóa (thao tác remove DB).',
     type: DepartmentEntityResponseDto,
   })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
-  @ApiNotFoundResponse({ description: '`Không tìm thấy bộ môn`.' })
+  @ApiNotFoundResponse({ description: '*Không tìm thấy bộ môn*.' })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB hoặc system log.' })
   remove(@Param('id') id: string, @Req() req: any) {
     return this.departmentsService.remove(id, req.user);

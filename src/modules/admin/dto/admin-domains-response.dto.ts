@@ -12,7 +12,7 @@ export class AdminDomainItemDto {
 
   @ApiProperty({
     example: 27,
-    description: 'Số user có email khớp `LIKE %@<domain>` (theo `AdminService.findAll`).',
+    description: 'Số user có email thuộc domain đó (theo logic **findAll** admin).',
   })
   userCount: number;
 }

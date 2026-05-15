@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** Phản hồi dạng `{ message: string }` (xóa domain, factory reset). */
+/** Phản hồi dạng object có message (xóa domain, factory reset). */
 export class AdminMessageResponseDto {
   @ApiProperty({
     example: 'Domain removed successfully',

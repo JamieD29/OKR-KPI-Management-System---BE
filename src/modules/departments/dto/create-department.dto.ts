@@ -4,7 +4,7 @@ import { IsNotEmpty, IsOptional, IsString, Matches, Length } from 'class-validat
 export class CreateDepartmentDto {
   @ApiProperty({
     example: 'Công nghệ phần mềm',
-    description: 'Tên bộ môn (duy nhất theo logic service — check trùng `name`).',
+    description: 'Tên bộ môn (duy nhất theo logic service — không trùng **name**).',
   })
   @IsNotEmpty({ message: 'Tên bộ môn không được để trống' })
   @Matches(/^[a-zA-Z0-9\sÀ-ỹ-]+$/, {

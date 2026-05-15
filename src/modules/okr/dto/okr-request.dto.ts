@@ -18,12 +18,12 @@ export class CreateDepartmentOkrDto {
   @IsNotEmpty()
   title: string;
 
-  @ApiProperty({ example: 'DEPARTMENT', description: 'Loại OKR (vd `DEPARTMENT`).' })
+  @ApiProperty({ example: 'DEPARTMENT', description: 'Loại OKR (ví dụ *DEPARTMENT*).' })
   @IsString()
   @IsNotEmpty()
   type: string;
 
-  @ApiProperty({ format: 'uuid', description: '`evaluation_cycles.id`.' })
+  @ApiProperty({ format: 'uuid', description: 'UUID **evaluation_cycles.id**.' })
   @IsUUID('4')
   cycleId: string;
 
@@ -34,7 +34,7 @@ export class CreateDepartmentOkrDto {
 
   @ApiProperty({
     type: 'array',
-    description: 'Danh sách Key Result (JSON / partial entity); cascade lưu theo `Objective`.',
+    description: 'Danh sách Key Result (JSON / partial entity); cascade lưu theo **Objective**.',
     items: { type: 'object', additionalProperties: true },
   })
   @IsArray()
@@ -54,7 +54,7 @@ export class OkrChatBodyDto {
   @ApiPropertyOptional({
     enum: ['USER', 'MANAGER'],
     default: 'USER',
-    description: 'Mặc định `USER` nếu bỏ qua.',
+    description: 'Mặc định *USER* nếu bỏ qua.',
   })
   @IsOptional()
   @IsIn(['USER', 'MANAGER'])
@@ -62,12 +62,12 @@ export class OkrChatBodyDto {
 }
 
 export class ItemScoreUpdatesDto {
-  @ApiPropertyOptional({ description: 'Cập nhật `maxScore` trên node `itemId`.' })
+  @ApiPropertyOptional({ description: 'Cập nhật **maxScore** trên node **itemId**.' })
   @IsOptional()
   @IsNumber()
   maxScore?: number;
 
-  @ApiPropertyOptional({ description: 'Cập nhật `unitScore`.' })
+  @ApiPropertyOptional({ description: 'Cập nhật **unitScore**.' })
   @IsOptional()
   @IsNumber()
   unitScore?: number;
@@ -86,7 +86,7 @@ export class EditItemBodyDto {
 
 export class RejectOkrDto {
   @ApiPropertyOptional({
-    description: 'Mặc định trong controller: `Không có lý do` nếu không gửi.',
+    description: 'Mặc định trong controller: *Không có lý do* nếu không gửi.',
   })
   @IsOptional()
   @IsString()
@@ -98,7 +98,7 @@ export class SelfReportBodyDto {
     type: 'object',
     additionalProperties: true,
     description:
-      'Map khóa `${objectiveId}-${itemId}` (và cấp con nếu có) → `{ quantity, evidence?, ... }`.',
+      'Map khóa dạng *objectiveId-itemId* (và cấp con nếu có) → object có **quantity**, **evidence**, …',
   })
   @IsObject()
   selfReportData: Record<string, unknown>;
@@ -108,7 +108,7 @@ export class ManagerReviewOkrBodyDto {
   @ApiProperty({
     type: 'object',
     additionalProperties: true,
-    description: 'Cùng cấu trúc map số lượng như `selfReportData` (điểm cấp quản lý).',
+    description: 'Cùng cấu trúc map số lượng như **selfReportData** (điểm cấp quản lý).',
   })
   @IsObject()
   managerReportData: Record<string, unknown>;

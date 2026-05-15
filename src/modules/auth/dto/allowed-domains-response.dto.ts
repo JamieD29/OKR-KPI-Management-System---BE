@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-/** Một domain được phép — API chỉ trả về field `domain` (select trong service). */
+/** Một domain được phép — API chỉ trả field domain (select trong service). */
 export class AllowedDomainItemDto {
   @ApiProperty({
     example: 'itec.hcmus.edu.vn',

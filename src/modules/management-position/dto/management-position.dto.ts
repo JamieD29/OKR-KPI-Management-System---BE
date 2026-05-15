@@ -10,7 +10,7 @@ export class CreateManagementPositionDto {
 
   @ApiProperty({
     example: 'TRUONG_KHOA',
-    description: 'Service chuẩn hóa UPPER, space → `_`, bỏ ký tự không phải A-Z0-9_.',
+    description: 'Service chuẩn hóa UPPER, khoảng trắng thành **gạch dưới**, bỏ ký tự không phải A–Z, 0–9, gạch dưới.',
   })
   @IsString()
   @IsNotEmpty()

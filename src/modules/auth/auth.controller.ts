@@ -26,7 +26,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Lấy danh sách tên miền email được phép',
     description:
-      'Public, không cần JWT. Trả về các domain trong bảng `allowed_domains` — mỗi phần tử chỉ có field `domain` (theo `getPublicDomains()`). Frontend dùng để hiển thị hoặc kiểm tra trước khi đăng nhập SSO.',
+      'Public, không cần JWT. Trả về các domain trong bảng **allowed_domains** — mỗi phần tử chỉ có trường **domain** (logic **getPublicDomains** trong service). Frontend dùng để hiển thị hoặc kiểm tra trước khi đăng nhập SSO.',
   })
   @ApiOkResponse({
     description: 'Danh sách domain được phép',
@@ -43,17 +43,20 @@ export class AuthController {
   @Get('google')
   @UseGuards(AuthGuard('google'))
   @ApiOperation({
-    summary: 'Khởi động đăng nhập Google OAuth 2.0',
+    summary: 'Bắt đầu đăng nhập Google',
     description:
-      'Public. Handler rỗng — `AuthGuard(\'google\')` redirect **302** tới Google consent (`https://accounts.google.com/o/oauth2/v2/auth?...`). Passport tự gắn `client_id`, `redirect_uri`, `scope`, `response_type=code`. Sau khi user đồng ý, Google gọi `GET /auth/google/callback`. **Không trả JSON.**',
+      '**Mục đích:** Cho user *mở* hoặc *chuyển hướng trình duyệt* tới đây để đăng nhập bằng Google (**/auth/google**).\n\n' +
+      '**Đặc điểm:** *Công khai* — không cần JWT. Server *không* trả body JSON; chỉ **chuyển** trình duyệt sang Google.\n\n' +
+      '**Phản hồi:** **302** — trình duyệt được đưa sang trang của Google để đăng nhập và đồng ý chia sẻ thông tin. *Không* trả body JSON.\n\n' +
+      '**Tiếp theo:** Sau khi user đồng ý, trình duyệt được chuyển tới **/auth/google/callback** để nhận token và dữ liệu user.',
   })
   @ApiResponse({
     status: 302,
     description:
-      'Redirect tới trang đăng nhập / consent của Google. Header `Location` chứa URL đầy đủ với query OAuth.',
+      '**302** — header **Location** trỏ tới trang đăng nhập / cấp quyền của Google (URL đầy đủ có sẵn các tham số OAuth). *Không* có body JSON.',
     headers: {
       Location: {
-        description: 'Google OAuth authorize URL (Passport GoogleStrategy tự build).',
+        description: 'URL authorize của Google được build sẵn cho ứng dụng.',
         schema: {
           type: 'string',
           example:
@@ -64,7 +67,7 @@ export class AuthController {
   })
   @ApiInternalServerErrorResponse({
     description:
-      'Ví dụ `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` chưa cấu hình hoặc lỗi khởi tạo `GoogleStrategy`.',
+      'Thường do cấu hình đăng nhập Google trên server chưa đầy đủ, hoặc lỗi khi khởi động luồng OAuth.',
   })
   async googleAuth(@Req() req) {}
 
@@ -74,15 +77,19 @@ export class AuthController {
   @ApiOperation({
     summary: 'Google OAuth 2.0 callback',
     description:
-      '**Không gọi trực tiếp từ FE như REST thông thường.** Google redirect trình duyệt tới đây sau khi user đồng ý. Passport đổi `code` lấy profile, `AuthService` xác thực domain + tạo/cập nhật user, `login()` sinh JWT. Server trả **302** tới `${FRONTEND_URL}/login?accessToken=<JWT>&user=<encodeURIComponent(JSON.stringify(user))>`. `FRONTEND_URL` = `process.env.FRONTEND_URL` hoặc `http://localhost:5173`.\n\n' +
-      'Query `user` sau khi decode: `id`, `email`, `name`, `avatar` (từ DB `avatarUrl`), `roles` (mảng slug), `jobTitle`, `profileCompleted`, `department` (`{ id, name }` hoặc null), `managementPosition` (`{ id, name, slug, permissionLevel }` hoặc null).\n\n' +
-      '**Lỗi domain:** `DOMAIN_NOT_ALLOWED` → `AuthExceptionFilter` redirect `${FRONTEND_URL}/login?error=domain_not_allowed` (302).',
+      '**Luồng:** User bắt đầu từ **/auth/google**; sau khi đồng ý với Google, trình duyệt được chuyển tới đây — *không* phải kiểu gọi API thông thường từ giao diện. Server đổi **code** lấy thông tin tài khoản, kiểm tra domain, tạo hoặc cập nhật user, phát hành JWT.\n\n' +
+      '**Kết quả:** **302** về trang đăng nhập frontend: **FRONTEND_URL**/login với query **accessToken** (JWT) và **user** (chuỗi JSON đã mã hoá URL). **FRONTEND_URL** là biến môi trường hoặc mặc định *http://localhost:5173*.\n\n' +
+      '**Một số trường quan trọng trong user (giải mã JSON):**\n\n' +
+      '- *Nhận diện & quyền:* **id**, **email**, **roles**\n' +
+      '- *Hồ sơ:* **name**, **avatar** (từ **avatarUrl** trong DB), **jobTitle**, **profileCompleted**\n' +
+      '- *Tổ chức:* **department** (id, name hoặc null), **managementPosition** (id, name, slug, permissionLevel hoặc null)\n\n' +
+      '**Lỗi domain không được phép:** **302** về **FRONTEND_URL**/login với query **error** = *domain_not_allowed*.',
   })
   @ApiHeader({
     name: 'Cookie',
     required: false,
     description:
-      'Session cookie do Express Session gắn; Passport dùng để verify `state` trong luồng OAuth.',
+      'Session cookie do Express Session gắn; Passport dùng để kiểm **state** trong luồng OAuth.',
   })
   @ApiQuery({
     name: 'code',
@@ -105,19 +112,19 @@ export class AuthController {
     name: 'error',
     required: false,
     description:
-      'Nếu user từ chối hoặc Google báo lỗi (vd `access_denied`); khi có thì thường không có `code`.',
+      'Nếu user từ chối hoặc Google báo lỗi (ví dụ *access_denied*); khi có thì thường không có tham số **code**.',
     example: 'access_denied',
   })
   @ApiResponse({
     status: 302,
     description:
       '**Redirect — không có body JSON.**\n\n' +
-      '- **Thành công:** `Location` = `{FRONTEND_URL}/login?accessToken=<JWT>&user=<URL-encoded JSON>`.\n' +
-      '- **Domain không được phép:** `Location` = `{FRONTEND_URL}/login?error=domain_not_allowed`.',
+      '- **Thành công:** header **Location** trỏ tới **FRONTEND_URL**/login với query **accessToken** (JWT) và **user** (JSON đã mã hoá URL).\n' +
+      '- **Domain không được phép:** header **Location** trỏ tới **FRONTEND_URL**/login với query **error** = *domain_not_allowed*.',
     headers: {
       Location: {
         description:
-          'URL frontend. Thành công: có `accessToken` và `user`. Lỗi domain: có `error=domain_not_allowed`.',
+          'URL frontend. Thành công: **accessToken** và **user**. Lỗi domain: **error** = *domain_not_allowed*.',
         schema: {
           type: 'string',
           example:
@@ -128,11 +135,11 @@ export class AuthController {
   })
   @ApiUnauthorizedResponse({
     description:
-      'Passport `AuthGuard(\'google\')` từ chối: `code` sai/hết hạn, mismatch `state`, OAuth bị từ chối, v.v.',
+      'Guard OAuth Google từ chối: **code** sai hoặc hết hạn, **state** không khớp, user từ chối OAuth, v.v.',
   })
   @ApiInternalServerErrorResponse({
     description:
-      'Ví dụ profile Google không có email (`Email not found from provider`), hoặc lỗi DB khi lưu user.',
+      'Ví dụ profile Google không có email (*Email not found from provider*), hoặc lỗi DB khi lưu user.',
   })
   async googleAuthRedirect(@Req() req, @Res() res) {
     const result = await this.authService.login(req.user);
@@ -147,22 +154,27 @@ export class AuthController {
   @Get('microsoft')
   @UseGuards(AuthGuard('microsoft'))
   @ApiOperation({
-    summary: 'Khởi động đăng nhập Microsoft (Azure AD / Microsoft Identity)',
+    summary: 'Bắt đầu đăng nhập Microsoft',
     description:
-      'Public. Handler rỗng — `AuthGuard(\'microsoft\')` redirect **302** tới Microsoft authorize (`https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize?...`). Tenant từ env `MICROSOFT_TENANT_ID` (thường `common`). Passport bật `state` + PKCE — cần **session cookie** (Express Session). **Không trả JSON.**',
+      '**Mục đích:** Cho user *mở* hoặc *chuyển hướng trình duyệt* tới đây để đăng nhập bằng tài khoản Microsoft (**/auth/microsoft**).\n\n' +
+      '**Đặc điểm:** *Công khai* — không cần JWT. Trình duyệt thường nhận **cookie phiên** dùng ở bước callback để *khớp state* và bảo vệ đăng nhập (PKCE).\n\n' +
+      '**Phản hồi:** **302** — trình duyệt được đưa sang trang đăng nhập Microsoft / Azure AD. *Không* trả body JSON.\n\n' +
+      '**Tiếp theo:** Sau khi user đăng nhập và đồng ý, trình duyệt được chuyển tới **/auth/microsoft/callback**.\n\n' +
+      '**Tenant:** thường lấy từ biến môi trường (ví dụ *common* để cho nhiều loại tài khoản).',
   })
   @ApiHeader({
     name: 'Cookie',
     required: false,
-    description: 'Session cookie lưu state / PKCE verifier cho luồng Microsoft.',
+    description:
+      'Sau redirect, có thể có cookie phiên dùng ở bước **/auth/microsoft/callback** (state và PKCE).',
   })
   @ApiResponse({
     status: 302,
     description:
-      'Redirect tới Microsoft Identity Platform. Header `Location` chứa `client_id`, `scope`, `state`, `code_challenge`, v.v.',
+      '**302** — header **Location** trỏ tới trang đăng nhập Microsoft. *Không* có body JSON.',
     headers: {
       Location: {
-        description: 'Microsoft OAuth authorize URL (Passport MicrosoftStrategy tự build).',
+        description: 'URL authorize của Microsoft được build sẵn cho ứng dụng.',
         schema: {
           type: 'string',
           example:
@@ -173,7 +185,7 @@ export class AuthController {
   })
   @ApiInternalServerErrorResponse({
     description:
-      'Ví dụ `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` chưa cấu hình, hoặc thiếu session middleware (cần cho state/PKCE).',
+      'Thường do cấu hình Microsoft trên server chưa đầy đủ, hoặc thiếu phần session cần cho state và PKCE.',
   })
   async microsoftAuth(@Req() req) {}
 
@@ -183,15 +195,20 @@ export class AuthController {
   @ApiOperation({
     summary: 'Microsoft OAuth 2.0 callback',
     description:
-      '**Không gọi trực tiếp từ FE.** Microsoft redirect browser tới đây sau khi user đăng nhập. Passport đổi `code` (kèm `code_verifier` trong session) lấy profile, `validateOAuthLogin` + `login()` sinh JWT, server trả **302** tới `${FRONTEND_URL}/login?accessToken=<JWT>&user=<encodeURIComponent(JSON)>`. Cấu trúc `user` giống Google callback; với Microsoft thường `avatar: null`.\n\n' +
-      '**Lỗi domain:** `DOMAIN_NOT_ALLOWED` → redirect `${FRONTEND_URL}/login?error=domain_not_allowed`.\n\n' +
-      'Lỗi profile không có email có thể trả 500 từ strategy/service (vd `Cannot retrieve email from Microsoft account`).',
+      '**Luồng:** User bắt đầu từ **/auth/microsoft**; sau khi đăng nhập với Microsoft, trình duyệt được chuyển tới đây — *không* phải kiểu gọi API thông thường từ giao diện. *Cùng phiên trình duyệt* cần cookie **session** (từ bước trước) để đối chiếu **state** và PKCE khi đổi **code**. Server đổi **code** lấy thông tin tài khoản, kiểm tra domain, tạo hoặc cập nhật user, phát hành JWT.\n\n' +
+      '**Kết quả:** **302** về trang đăng nhập frontend: **FRONTEND_URL**/login với query **accessToken** (JWT) và **user** (chuỗi JSON đã mã hoá URL). **FRONTEND_URL** là biến môi trường hoặc mặc định *http://localhost:5173*.\n\n' +
+      '**Một số trường quan trọng trong user (giải mã JSON):**\n\n' +
+      '- *Nhận diện & quyền:* **id**, **email**, **roles**\n' +
+      '- *Hồ sơ:* **name**, **avatar** (từ **avatarUrl** trong DB; *với Microsoft thường null*), **jobTitle**, **profileCompleted**\n' +
+      '- *Tổ chức:* **department** (id, name hoặc null), **managementPosition** (id, name, slug, permissionLevel hoặc null)\n\n' +
+      '**Lỗi domain không được phép:** **302** về **FRONTEND_URL**/login với query **error** = *domain_not_allowed*.\n\n' +
+      '**Lưu ý:** nếu Microsoft không cung cấp email cho ứng dụng, có thể nhận lỗi **500**.',
   })
   @ApiHeader({
     name: 'Cookie',
     required: true,
     description:
-      'Session bắt buộc để Passport đối chiếu `state` và `code_verifier` (PKCE).',
+      'Session bắt buộc để Passport đối chiếu **state** và **code_verifier** (PKCE).',
   })
   @ApiQuery({
     name: 'code',
@@ -212,7 +229,7 @@ export class AuthController {
   @ApiQuery({
     name: 'error',
     required: false,
-    description: 'Ví dụ `access_denied`, `consent_required` nếu user từ chối hoặc IdP lỗi.',
+    description: 'Ví dụ *access_denied*, *consent_required* nếu user từ chối hoặc IdP lỗi.',
   })
   @ApiQuery({
     name: 'error_description',
@@ -223,12 +240,12 @@ export class AuthController {
     status: 302,
     description:
       '**Redirect — không có body JSON.**\n\n' +
-      '- **Thành công:** `Location` = `{FRONTEND_URL}/login?accessToken=<JWT>&user=<URL-encoded JSON>`.\n' +
-      '- **Domain không được phép:** `Location` = `{FRONTEND_URL}/login?error=domain_not_allowed`.',
+      '- **Thành công:** header **Location** trỏ tới **FRONTEND_URL**/login với query **accessToken** (JWT) và **user** (JSON đã mã hoá URL).\n' +
+      '- **Domain không được phép:** header **Location** trỏ tới **FRONTEND_URL**/login với query **error** = *domain_not_allowed*.',
     headers: {
       Location: {
         description:
-          'URL frontend. Thành công: `accessToken` + `user`. Lỗi domain: `error=domain_not_allowed`.',
+          'URL frontend. Thành công: **accessToken** và **user**. Lỗi domain: **error** = *domain_not_allowed*.',
         schema: {
           type: 'string',
           example:
@@ -239,11 +256,11 @@ export class AuthController {
   })
   @ApiUnauthorizedResponse({
     description:
-      'Passport `AuthGuard(\'microsoft\')` từ chối: `state` không khớp, PKCE mismatch, code hết hạn, thiếu session, v.v.',
+      'Guard OAuth Microsoft từ chối: **state** không khớp, lỗi PKCE, **code** hết hạn, thiếu session, v.v.',
   })
   @ApiInternalServerErrorResponse({
     description:
-      'Profile Microsoft không có email, `Email not found from provider`, hoặc lỗi DB khi lưu user.',
+      'Profile Microsoft không có email (*Email not found from provider*), hoặc lỗi DB khi lưu user.',
   })
   async microsoftAuthRedirect(@Req() req, @Res() res) {
     const data = await this.authService.login(req.user);
@@ -263,14 +280,15 @@ export class AuthController {
   @ApiOperation({
     summary: 'Đăng xuất',
     description:
-      'Yêu cầu JWT hợp lệ. Ghi `system_logs` (`action=LOGOUT`, `resource=AUTH`). Trả `{ message: \'Đăng xuất thành công\' }`. **Không revoke JWT** — client tự xóa token; token vẫn hợp lệ tới khi hết hạn.',
+      'Yêu cầu JWT hợp lệ. Ghi vào nhật ký **system_logs** (hành động **LOGOUT**, tài nguyên **AUTH**). Trả JSON có trường **message** là *Đăng xuất thành công*. **Không thu hồi JWT** — client tự xóa token; token vẫn hợp lệ tới khi hết hạn.',
   })
   @ApiOkResponse({
     description: 'Đăng xuất thành công',
     type: AuthLogoutResponseDto,
   })
   @ApiUnauthorizedResponse({
-    description: 'Thiếu `Authorization: Bearer <token>` hoặc token không hợp lệ / hết hạn.',
+    description:
+      'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc token không hợp lệ / hết hạn.',
   })
   @ApiInternalServerErrorResponse({
     description: 'Lỗi khi ghi system log (hiếm).',

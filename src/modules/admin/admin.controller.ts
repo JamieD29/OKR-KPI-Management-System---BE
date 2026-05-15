@@ -26,7 +26,7 @@ import { AdminMessageResponseDto } from './dto/admin-message-response.dto';
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn.',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn.',
 })
 @ApiForbiddenResponse({
   description: 'JWT hợp lệ nhưng không đủ quyền ADMIN.',
@@ -42,14 +42,14 @@ export class AdminController {
   @ApiOperation({
     summary: 'Danh sách allowed domains',
     description:
-      'Trả về mọi bản ghi `AllowedDomain`, sắp `addedAt DESC`. Mỗi phần tử có thêm `userCount` (đếm user có `email LIKE %@<domain>`).',
+      'Trả về mọi bản ghi **AllowedDomain**, sắp **addedAt** giảm dần. Mỗi phần tử có thêm **userCount** (số user có email thuộc domain đó).',
   })
   @ApiOkResponse({
     description: 'Danh sách domain kèm số user sử dụng',
     type: AdminListDomainsResponseDto,
   })
   @ApiInternalServerErrorResponse({
-    description: 'Lỗi DB khi đếm user hoặc truy vấn `allowed_domains`.',
+    description: 'Lỗi DB khi đếm user hoặc truy vấn bảng **allowed_domains**.',
   })
   getAllDomains() {
     return this.adminService.findAll();
@@ -59,7 +59,7 @@ export class AdminController {
   @ApiOperation({
     summary: 'Thêm allowed domain',
     description:
-      'Thêm tên miền mới vào `allowed_domains`. Trùng domain → `409` (`Domain already exists`).',
+      'Thêm tên miền mới vào bảng **allowed_domains**. Domain trùng → **409** với *Domain already exists*.',
   })
   @ApiBody({ type: AddDomainDto })
   @ApiOkResponse({
@@ -67,11 +67,11 @@ export class AdminController {
     type: AdminCreateDomainResponseDto,
   })
   @ApiBadRequestResponse({
-    description: 'Body thiếu `domain` hoặc `domain` rỗng (ValidationPipe).',
+    description: 'Body thiếu trường **domain** hoặc **domain** rỗng (ValidationPipe).',
   })
   @ApiConflictResponse({
     description:
-      '`Domain already exists` — domain đã tồn tại (unique constraint).',
+      '*Domain already exists* — domain đã tồn tại (unique constraint).',
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi khi lưu DB.' })
   addDomain(@Body() dto: AddDomainDto) {
@@ -82,18 +82,18 @@ export class AdminController {
   @ApiOperation({
     summary: 'Xóa allowed domain theo id',
     description:
-      'Ràng buộc: domain phải tồn tại; sau khi xóa vẫn còn ít nhất 1 domain; không được có user nào `email LIKE %@<domain>`.',
+      'Ràng buộc: domain phải tồn tại; sau khi xóa vẫn còn ít nhất một domain; không được còn user nào dùng domain này.',
   })
   @ApiParam({
     name: 'id',
     format: 'uuid',
-    description: 'UUID của bản ghi `AllowedDomain`.',
+    description: 'UUID của bản ghi **AllowedDomain**.',
   })
   @ApiOkResponse({
     description: 'Xóa thành công',
     type: AdminMessageResponseDto,
   })
-  @ApiNotFoundResponse({ description: '`Domain not found` — sai id.' })
+  @ApiNotFoundResponse({ description: '*Domain not found* — sai id.' })
   @ApiConflictResponse({
     description:
       'Hệ thống phải còn ít nhất 1 domain, hoặc còn user đang dùng domain này (message tiếng Việt kèm số lượng).',
@@ -107,12 +107,12 @@ export class AdminController {
   @ApiOperation({
     summary: 'Factory reset toàn hệ thống',
     description:
-      'Gọi `DatabaseSeederService.factoryReset()`: TRUNCATE CASCADE các bảng nghiệp vụ rồi seed lại role, allowed_domains, departments mặc định.\n\n' +
+      'Gọi **DatabaseSeederService.factoryReset()**: làm trống (truncate cascade) các bảng nghiệp vụ rồi seed lại vai trò, **allowed_domains**, khoa mặc định.\n\n' +
       '**Cảnh báo:** xóa toàn bộ user, OKR, log, notification… Không thể hoàn tác. Body không bắt buộc.',
   })
   @ApiOkResponse({
     description:
-      'Reset hoàn tất. Message cố định: `Hệ thống đã được khôi phục về cài đặt gốc thành công!`',
+      'Reset hoàn tất. Message cố định: *Hệ thống đã được khôi phục về cài đặt gốc thành công!*',
     type: AdminMessageResponseDto,
   })
   @ApiInternalServerErrorResponse({

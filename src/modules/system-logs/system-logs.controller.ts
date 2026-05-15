@@ -22,7 +22,7 @@ import {
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn.',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn.',
 })
 @Controller('system-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -34,7 +34,7 @@ export class SystemLogsController {
   @ApiOperation({
     summary: 'Danh sách nhật ký hệ thống',
     description:
-      'Chỉ **ADMIN**. Mọi bản ghi `system_logs`, quan hệ `user`, sort `createdAt DESC`.',
+      'Chỉ **ADMIN**. Mọi bản ghi trong bảng **system_logs**, kèm quan hệ **user**, sort **createdAt** giảm dần.',
   })
   @ApiOkResponse({
     description: 'Mảng log',
@@ -42,7 +42,7 @@ export class SystemLogsController {
     isArray: true,
   })
   @ApiForbiddenResponse({
-    description: 'Không có role ADMIN (`RolesGuard`).',
+    description: 'Không có role ADMIN (guard vai trò).',
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB khi truy vấn.' })
   findAll() {
@@ -54,7 +54,7 @@ export class SystemLogsController {
   @ApiOperation({
     summary: 'Xóa toàn bộ nhật ký',
     description:
-      'Chỉ **ADMIN**. `Repository.clear()` trên bảng `system_logs` — **không thể hoàn tác**.',
+      'Chỉ **ADMIN**. Gọi xóa toàn bộ bảng **system_logs** (**không thể hoàn tác**).',
   })
   @ApiOkResponse({
     description: 'Thông báo sau khi xóa',

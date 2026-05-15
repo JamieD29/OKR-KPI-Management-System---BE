@@ -44,7 +44,7 @@ import { JobTitle } from '../../database/entities/user.entity';
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
   description:
-    'Thiếu `Authorization: Bearer <token>` hoặc JWT không hợp lệ / hết hạn (`JwtAuthGuard`).',
+    'Thiếu header **Authorization** dạng **Bearer** kèm token, hoặc JWT không hợp lệ / hết hạn (guard JWT).',
 })
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -58,7 +58,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Lựa chọn enum hồ sơ (job title, học hàm, học vị, giới tính)',
     description:
-      'Single source of truth cho FE: map từ enum trong `user.entity.ts` qua `DatabaseSeederService.getProfileOptions()`. Mỗi mục có `value`, `label`, `key`.',
+      'Nguồn dữ liệu duy nhất cho FE: map từ enum trong entity User qua **getProfileOptions** của DatabaseSeeder. Mỗi mục có **value**, **label**, **key**.',
   })
   @ApiOkResponse({
     description: 'Các nhóm lựa chọn cho form profile',
@@ -72,14 +72,16 @@ export class UsersController {
   @Get('profile')
   @ApiOperation({
     summary: 'Hồ sơ user đang đăng nhập',
-    description: '`UsersService.findOne(req.user.id)` — kèm `roles`, `department`, `managementPosition`.',
+    description:
+      'Truy vấn user theo id trong JWT — kèm **roles**, **department**, **managementPosition**.',
   })
   @ApiOkResponse({
     description: 'Chi tiết user',
     type: UserDetailSwaggerDto,
   })
   @ApiNotFoundResponse({
-    description: '`User with ID ... not found` — user JWT trỏ tới id không còn trong DB.',
+    description:
+      '*User with ID … not found* — token JWT trỏ tới id không còn trong DB.',
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB.' })
   getProfile(@Req() req) {
@@ -90,7 +92,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Cập nhật hồ sơ cá nhân',
     description:
-      'Chỉ các field gửi lên mới được cập nhật. `departmentId` gán `department` qua quan hệ.',
+      'Chỉ các field gửi lên mới được cập nhật. **departmentId** gán quan hệ **department**.',
   })
   @ApiBody({ type: UpdateProfileDto })
   @ApiOkResponse({
@@ -110,22 +112,22 @@ export class UsersController {
   @ApiOperation({
     summary: 'Lọc user theo chức vụ quản lý và/hoặc chức danh nghề nghiệp',
     description:
-      '`UsersService.findByRole`: filter `managementPosition.id` và `jobTitle` (enum). Cả hai query đều optional; nếu không có filter thì trả về tất cả user (theo điều kiện TypeORM).',
+      'Logic **findByRole**: lọc theo **managementPosition.id** và **jobTitle** (enum). Hai query đều tùy chọn; không filter thì trả toàn bộ user (điều kiện ORM).',
   })
   @ApiQuery({
     name: 'positionId',
     required: false,
     format: 'uuid',
-    description: 'UUID `management_positions.id`.',
+    description: 'UUID bản ghi **management_positions**.',
   })
   @ApiQuery({
     name: 'jobTitle',
     required: false,
     enum: JobTitle,
-    description: 'Giá trị enum `JobTitle` (tiếng Việt như trong entity).',
+    description: 'Giá trị enum **JobTitle** (tiếng Việt như trong entity).',
   })
   @ApiOkResponse({
-    description: 'Mảng user, sort `name ASC`',
+    description: 'Mảng user, sort **name** tăng dần',
     type: UserDetailSwaggerDto,
     isArray: true,
   })
@@ -141,22 +143,22 @@ export class UsersController {
   @ApiOperation({
     summary: 'Danh sách nhân sự (Admin / quản lý cấp khoa-đơn vị)',
     description:
-      'Query `departmentId` optional. **Phân quyền:** chỉ ADMIN, `managementPosition.permissionLevel` SYSTEM/KHOA, hoặc DON_VI được xem; DON_VI không phải admin/khoa bị ép filter theo department của chính họ (bỏ qua departmentId lạ). Trái phép → `403 Forbidden`.',
+      'Tham số **departmentId** tùy chọn. **Phân quyền:** chỉ ADMIN, **permissionLevel** SYSTEM/KHOA, hoặc DON_VI được xem; DON_VI không phải admin/khoa bị ép lọc theo bộ môn của chính họ (bỏ qua departmentId lạ). Trái phép → **403 Forbidden**.',
   })
   @ApiQuery({
     name: 'departmentId',
     required: false,
     format: 'uuid',
-    description: 'Lọc theo `departments.id` (khi được phép).',
+    description: 'Lọc theo UUID bộ môn (**departments.id**) khi được phép.',
   })
   @ApiOkResponse({
-    description: 'Danh sách user, sort `createdAt DESC`',
+    description: 'Danh sách user, sort **createdAt** giảm dần',
     type: UserDetailSwaggerDto,
     isArray: true,
   })
   @ApiForbiddenResponse({
     description:
-      '`Bạn không có quyền xem danh sách nhân sự` hoặc RolesGuard từ chối.',
+      '*Bạn không có quyền xem danh sách nhân sự* hoặc guard vai trò từ chối.',
   })
   @ApiInternalServerErrorResponse()
   async findAll(@Req() req, @Query('departmentId') departmentId?: string) {
@@ -186,7 +188,7 @@ export class UsersController {
   @ApiOperation({
     summary: 'Gán lại roles cho user (chỉ ADMIN)',
     description:
-      'Slug được chuẩn hóa in hoa trong service. Nếu không role nào khớp DB → `400`.',
+      'Slug được chuẩn hóa in hoa trong service. Không role nào khớp DB → **400**.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'User id' })
   @ApiBody({ type: UpdateUserRolesDto })
@@ -195,13 +197,13 @@ export class UsersController {
     type: UserDetailSwaggerDto,
   })
   @ApiForbiddenResponse({
-    description: 'Không có role ADMIN (`RolesGuard`).',
+    description: 'Không có role ADMIN (guard vai trò).',
   })
   @ApiBadRequestResponse({
     description:
-      '`Role không hợp lệ hoặc không tìm thấy trong DB` — payload roles rỗng hoặc slug không tồn tại.',
+      '*Role không hợp lệ hoặc không tìm thấy trong DB* — payload roles rỗng hoặc slug không tồn tại.',
   })
-  @ApiNotFoundResponse({ description: 'User với `id` không tồn tại.' })
+  @ApiNotFoundResponse({ description: 'User với **id** không tồn tại.' })
   @ApiInternalServerErrorResponse()
   async updateUserRoles(@Param('id') userId: string, @Body() body: UpdateUserRolesDto) {
     return this.usersService.updateRoles(userId, body.roles);
@@ -212,18 +214,18 @@ export class UsersController {
   @ApiOperation({
     summary: 'Gán / gỡ chức vụ quản lý (chỉ ADMIN)',
     description:
-      '`positionId` UUID hoặc `null` để gỡ. Gửi notification cho user khi gán/gỡ.',
+      '**positionId** là UUID hoặc *null* để gỡ chức vụ. Gửi thông báo cho user khi gán/gỡ.',
   })
   @ApiParam({ name: 'id', format: 'uuid', description: 'User id' })
   @ApiBody({ type: AssignManagementPositionDto })
   @ApiOkResponse({
-    description: 'User sau khi cập nhật `managementPosition`',
+    description: 'User sau khi cập nhật **managementPosition**',
     type: UserDetailSwaggerDto,
   })
   @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
   @ApiNotFoundResponse({
     description:
-      'User không tồn tại, hoặc `positionId` không khớp bản ghi `management_positions`.',
+      'User không tồn tại, hoặc **positionId** không khớp bảng **management_positions**.',
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB hoặc tạo notification.' })
   async assignManagementPosition(

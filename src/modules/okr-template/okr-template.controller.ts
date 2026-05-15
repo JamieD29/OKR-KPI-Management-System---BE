@@ -32,13 +32,13 @@ export class OkrTemplateController {
   @ApiOperation({
     summary: 'Danh sách template OKR',
     description:
-      'Không có guard. Optional `departmentId`: lọc theo bộ môn; bỏ qua → toàn bộ, `createdAt DESC`.',
+      'Không có guard. Tham số **departmentId** tùy chọn: lọc theo bộ môn; bỏ qua → toàn bộ, sort **createdAt** giảm dần.',
   })
   @ApiQuery({
     name: 'departmentId',
     required: false,
     format: 'uuid',
-    description: 'Lọc `okr_templates.department_id`.',
+    description: 'Lọc theo cột **department_id** của bảng template.',
   })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto, isArray: true })
   @ApiInternalServerErrorResponse()
@@ -52,7 +52,7 @@ export class OkrTemplateController {
   @Get('job-titles')
   @ApiOperation({
     summary: 'Lựa chọn chức danh nghề nghiệp',
-    description: 'Map từ enum `JobTitle` trong `user.entity` (value/label/key).',
+    description: 'Ánh xạ từ enum **JobTitle** trong entity User (value / label / key).',
   })
   @ApiOkResponse({ type: JobTitleOptionDto, isArray: true })
   getJobTitles() {
@@ -64,7 +64,7 @@ export class OkrTemplateController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto })
   @ApiNotFoundResponse({
-    description: '`Template with ID ... not found`.',
+    description: '*Template with ID … not found*.',
   })
   @ApiInternalServerErrorResponse()
   findOne(@Param('id') id: string) {
@@ -75,12 +75,12 @@ export class OkrTemplateController {
   @ApiOperation({
     summary: 'Tạo template',
     description:
-      '**Public** trong code hiện tại — nên bảo vệ ở production. Nếu có `structure` không rỗng: tổng `maxScore` cấp root phải = 100.',
+      '**Công khai** trong code hiện tại — nên bảo vệ ở production. Nếu **structure** không rỗng: tổng **maxScore** ở cấp gốc phải = 100.',
   })
   @ApiBody({ type: CreateOkrTemplateDto })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto })
   @ApiBadRequestResponse({
-    description: 'Validation DTO hoặc tổng `maxScore` ≠ 100.',
+    description: 'Validation DTO hoặc tổng **maxScore** khác 100.',
   })
   @ApiInternalServerErrorResponse()
   create(@Body() createDto: CreateOkrTemplateDto) {
@@ -90,12 +90,12 @@ export class OkrTemplateController {
   @Put(':id')
   @ApiOperation({
     summary: 'Cập nhật template',
-    description: 'Nếu gửi `structure` mới: cùng quy tắc tổng điểm = 100.',
+    description: 'Nếu gửi **structure** mới: cùng quy tắc tổng điểm = 100.',
   })
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiBody({ type: UpdateOkrTemplateDto })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto })
-  @ApiBadRequestResponse({ description: 'Tổng `maxScore` không hợp lệ.' })
+  @ApiBadRequestResponse({ description: 'Tổng **maxScore** không hợp lệ.' })
   @ApiNotFoundResponse({ description: 'Template không tồn tại.' })
   @ApiInternalServerErrorResponse()
   update(@Param('id') id: string, @Body() updateDto: UpdateOkrTemplateDto) {
@@ -116,14 +116,14 @@ export class OkrTemplateController {
   @ApiOperation({
     summary: 'Áp dụng template — giao OKR cho nhiều user',
     description:
-      'Tạo `UserOkr` + notification từng user. User id không tồn tại bị **bỏ qua** (không fail toàn bộ). `structure` rỗng → 400.',
+      'Tạo **UserOkr** và gửi thông báo từng user. User id không tồn tại bị **bỏ qua** (không fail cả lô). **structure** rỗng → 400.',
   })
-  @ApiParam({ name: 'id', format: 'uuid', description: '`okr_templates.id`.' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'UUID bản ghi template (**okr_templates.id**).' })
   @ApiBody({ type: ApplyTemplateDto })
   @ApiOkResponse({ type: ApplyTemplateResponseDto })
   @ApiBadRequestResponse({
     description:
-      '`Template structure is empty`, `Phải chọn ít nhất 1 người`, hoặc validation DTO.',
+      '*Template structure is empty*, *Phải chọn ít nhất 1 người*, hoặc lỗi validation DTO.',
   })
   @ApiNotFoundResponse({ description: 'Template id không tồn tại.' })
   @ApiInternalServerErrorResponse()
