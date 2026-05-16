@@ -63,6 +63,13 @@ export class OkrController {
     return this.okrService.rejectOkr(id, reason || 'Không có lý do');
   }
 
+  // --- GIA HẠN DEADLINE ---
+
+  @Put(':id/extend-deadline')
+  async extendDeadline(@Param('id') id: string, @Body('newDeadline') newDeadline: string) {
+    return this.okrService.extendDeadline(id, new Date(newDeadline));
+  }
+
   // --- SELF-REPORT ---
 
   @Put(':id/self-report')
