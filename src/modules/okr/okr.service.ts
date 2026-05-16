@@ -49,22 +49,74 @@ export class OkrService {
     });
   }
 
+  // --- LAZY DEADLINE EVALUATION ---
+
+  /**
+   * Kiểm tra deadline và tự động chốt OKR quá hạn.
+   * Logic: Nếu deadline < now VÀ status = PENDING|NEGOTIATING
+   * → Auto chuyển sang ACCEPTED (lấy phiên bản keyResults mới nhất trong DB)
+   * → Gửi notification cho user
+   */
+  private async checkAndAutoAcceptExpired(okrs: UserOkr[]): Promise<UserOkr[]> {
+    const now = new Date();
+    const updated: UserOkr[] = [];
+
+    for (const okr of okrs) {
+      if (
+        okr.deadline &&
+        new Date(okr.deadline) < now &&
+        (okr.status === 'PENDING' || okr.status === 'NEGOTIATING')
+      ) {
+        okr.status = 'ACCEPTED';
+        // keyResults giữ nguyên phiên bản mới nhất đang có trong DB
+        await this.userOkrRepo.save(okr);
+
+        // Gửi thông báo cho user
+        await this.notificationService.create(
+          okr.userId,
+          `⏰ OKR "${okr.objective}" đã được tự động chốt do hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Phiên bản mới nhất đã được áp dụng.`,
+        );
+
+        updated.push(okr);
+      }
+    }
+
+    if (updated.length > 0) {
+      console.log(`⏰ Auto-accepted ${updated.length} expired OKR(s)`);
+    }
+
+    return okrs;
+  }
+
+  /** Check nếu OKR đã quá deadline đàm phán */
+  private isDeadlineExpired(okr: UserOkr): boolean {
+    if (!okr.deadline) return false;
+    return new Date(okr.deadline) < new Date();
+  }
+
   // --- OKR NEGOTIATION + SELF-REPORT WORKFLOW ---
 
   async getMyOkrs(userId: string) {
-    return this.userOkrRepo.find({
+    const okrs = await this.userOkrRepo.find({
       where: { userId },
       relations: ['cycle'],
       order: { createdAt: 'DESC' },
     });
+
+    // Lazy check: auto-accept nếu quá deadline
+    return this.checkAndAutoAcceptExpired(okrs);
   }
 
   async getPendingApproval() {
-    return this.userOkrRepo.find({
+    const okrs = await this.userOkrRepo.find({
       where: { status: 'NEGOTIATING' },
       relations: ['user', 'user.department', 'user.managementPosition'],
       order: { createdAt: 'DESC' },
     });
+
+    // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn NEGOTIATING
+    await this.checkAndAutoAcceptExpired(okrs);
+    return okrs.filter(o => o.status === 'NEGOTIATING');
   }
 
   async acceptOkr(id: string, userId: string) {
@@ -77,6 +129,13 @@ export class OkrService {
   async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
+
+    // Chặn đàm phán nếu đã quá deadline (chỉ chặn user, manager vẫn có thể)
+    if (sender === 'USER' && this.isDeadlineExpired(okr)) {
+      throw new BadRequestException(
+        `Đã hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Không thể gửi đề xuất mới.`,
+      );
+    }
 
     const changes = okr.proposedChanges || {};
     if (!changes[itemId]) {
@@ -138,10 +197,43 @@ export class OkrService {
       throw new BadRequestException('Chỉ có thể thay đổi cấu trúc khi đang đàm phán.');
     }
 
+    // Chặn thay đổi cấu trúc nếu đã quá deadline
+    if (this.isDeadlineExpired(okr)) {
+      throw new BadRequestException(
+        `Đã hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Không thể thay đổi cấu trúc OKR.`,
+      );
+    }
+
     okr.keyResults = keyResults;
     okr.status = 'NEGOTIATING';
     
     await this.userOkrRepo.save(okr);
+    return okr;
+  }
+
+  // --- GIA HẠN DEADLINE (Dành cho Trưởng khoa) ---
+
+  async extendDeadline(id: string, newDeadline: Date) {
+    const okr = await this.userOkrRepo.findOne({ where: { id } });
+    if (!okr) throw new NotFoundException('OKR not found');
+
+    if (okr.status === 'ACCEPTED' || okr.status === 'SUBMITTED' || okr.status === 'COMPLETED') {
+      throw new BadRequestException('Không thể gia hạn OKR đã được chốt hoặc đã hoàn thành.');
+    }
+
+    const oldDeadline = okr.deadline
+      ? new Date(okr.deadline).toLocaleDateString('vi-VN')
+      : 'Không có';
+
+    okr.deadline = newDeadline;
+    await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho user
+    await this.notificationService.create(
+      okr.userId,
+      `📅 Deadline đàm phán OKR "${okr.objective}" đã được gia hạn: ${oldDeadline} → ${new Date(newDeadline).toLocaleDateString('vi-VN')}.`,
+    );
+
     return okr;
   }
 
