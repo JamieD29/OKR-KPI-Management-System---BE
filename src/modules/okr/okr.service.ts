@@ -133,7 +133,7 @@ export class OkrService {
     // Chặn đàm phán nếu đã quá deadline (chỉ chặn user, manager vẫn có thể)
     if (sender === 'USER' && this.isDeadlineExpired(okr)) {
       throw new BadRequestException(
-        `Đã hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Không thể gửi đề xuất mới.`,
+        `Đã hết hạn đàm phán (${new Date(okr.deadline!).toLocaleDateString('vi-VN')}). Không thể gửi đề xuất mới.`,
       );
     }
 
@@ -207,7 +207,7 @@ export class OkrService {
     // Chặn thay đổi cấu trúc nếu đã quá deadline
     if (this.isDeadlineExpired(okr)) {
       throw new BadRequestException(
-        `Đã hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Không thể thay đổi cấu trúc OKR.`,
+        `Đã hết hạn đàm phán (${new Date(okr.deadline!).toLocaleDateString('vi-VN')}). Không thể thay đổi cấu trúc OKR.`,
       );
     }
 
@@ -363,6 +363,20 @@ export class OkrService {
                const subCalcScore = subUnitScore > 0 ? subQty * subUnitScore : subQty;
                const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
                objRawScore += subCappedScore;
+
+               // Bổ sung tính điểm cho Sub-Sub-KR (Cấp 4)
+               if (sub.items && Array.isArray(sub.items)) {
+                 for (const subsub of sub.items) {
+                   const subsubKey = `${obj.id}-${kr.id}-${sub.id}-${subsub.id}`;
+                   const subsubData = reportData[subsubKey];
+                   const subsubQty = subsubData ? (Number(subsubData.quantity) || 0) : 0;
+                   const subsubUnitScore = Number(subsub.unitScore) || 0;
+                   
+                   const subsubCalcScore = subsubUnitScore > 0 ? subsubQty * subsubUnitScore : subsubQty;
+                   const subsubCappedScore = Math.min(subsubCalcScore, Number(subsub.maxScore) || Infinity);
+                   objRawScore += subsubCappedScore;
+                 }
+               }
              }
           }
         }
@@ -400,6 +414,20 @@ export class OkrService {
              const subCalcScore = subUnitScore > 0 ? subQty * subUnitScore : subQty;
              const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
              objRawScore += subCappedScore;
+
+             // Bổ sung tính điểm cho Sub-Sub-KR (Cấp 4)
+             if (sub.items && Array.isArray(sub.items)) {
+               for (const subsub of sub.items) {
+                 const subsubKey = `${obj.id}-${kr.id}-${sub.id}-${subsub.id}`;
+                 const subsubData = reportData[subsubKey];
+                 const subsubQty = subsubData ? (Number(subsubData.quantity) || 0) : 0;
+                 const subsubUnitScore = Number(subsub.unitScore) || 0;
+                 
+                 const subsubCalcScore = subsubUnitScore > 0 ? subsubQty * subsubUnitScore : subsubQty;
+                 const subsubCappedScore = Math.min(subsubCalcScore, Number(subsub.maxScore) || Infinity);
+                 objRawScore += subsubCappedScore;
+               }
+             }
            }
         }
       }

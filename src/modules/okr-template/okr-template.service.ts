@@ -125,18 +125,45 @@ export class OkrTemplateService {
         continue;
       }
 
-      // Tạo 1 UserOkr chứa toàn bộ cấu trúc template
-      const userOkr = this.userOkrRepository.create({
-        user: user,
-        userId: userId,
-        cycleId: applyDto.cycleId,
-        objective: template.title,
-        keyResults: template.structure,
-        totalScore: 0,
-        templateId: templateId,
-        status: 'PENDING',
-        deadline: applyDto.deadline,
+      // Kiểm tra xem User đã có OKR trong kỳ đánh giá này chưa
+      let userOkr = await this.userOkrRepository.findOne({
+        where: { userId: userId, cycleId: applyDto.cycleId }
       });
+
+      if (userOkr) {
+        // Nếu OKR hiện tại đã chốt hoặc đã nộp báo cáo/hoàn thành, không cho phép gán đè
+        if (
+          userOkr.status === 'ACCEPTED' ||
+          userOkr.status === 'SUBMITTED' ||
+          userOkr.status === 'COMPLETED'
+        ) {
+          throw new BadRequestException(
+            `Nhân sự ${user.name || user.email} đã chốt hoặc đang nộp báo cáo OKR cho kỳ này. Không thể gán đè template mới.`
+          );
+        }
+
+        // Nếu đang ở trạng thái PENDING hoặc NEGOTIATING, cập nhật lại cấu trúc template mới
+        userOkr.objective = template.title;
+        userOkr.keyResults = template.structure;
+        userOkr.templateId = templateId;
+        userOkr.status = 'PENDING';
+        userOkr.deadline = applyDto.deadline ? new Date(applyDto.deadline) : null;
+        userOkr.proposedChanges = null; // Reset lại các đề xuất cũ
+      } else {
+        // Nếu chưa có, tạo mới hoàn toàn
+        userOkr = this.userOkrRepository.create({
+          user: user,
+          userId: userId,
+          cycleId: applyDto.cycleId,
+          objective: template.title,
+          keyResults: template.structure,
+          totalScore: 0,
+          templateId: templateId,
+          status: 'PENDING',
+          deadline: applyDto.deadline,
+        });
+      }
+
       const saved = await this.userOkrRepository.save(userOkr);
       results.push(saved);
 

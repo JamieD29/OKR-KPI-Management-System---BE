@@ -49,7 +49,7 @@ export class UserOkr {
   proposedChanges: any;
 
   @Column({ type: 'timestamp', nullable: true })
-  deadline: Date;
+  deadline: Date | null;
 
   // Dữ liệu tự khai từ user: { [krId]: { quantity: number, evidence: string } }
   @Column({ type: 'jsonb', nullable: true })
