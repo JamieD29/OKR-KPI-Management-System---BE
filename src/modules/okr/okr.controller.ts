@@ -53,6 +53,11 @@ export class OkrController {
     return this.okrService.updateOkrStructure(id, req.user.id || req.user.sub, body.keyResults, body.localComments);
   }
 
+  @Put(':id/manager-structure')
+  async managerUpdateOkrStructure(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.okrService.managerUpdateOkrStructure(id, req.user.id || req.user.sub, body.keyResults, body.localComments);
+  }
+
   @Put(':id/dean-approve')
   async approveOkr(@Param('id') id: string) {
     return this.okrService.approveOkr(id);

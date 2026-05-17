@@ -233,6 +233,35 @@ export class OkrService {
     return okr;
   }
 
+  async managerUpdateOkrStructure(id: string, managerId: string, keyResults: any[], localComments?: Record<string, any[]>) {
+    const okr = await this.userOkrRepo.findOne({ where: { id } });
+    if (!okr) throw new NotFoundException('OKR not found');
+    
+    if (okr.status !== 'PENDING' && okr.status !== 'NEGOTIATING') {
+      throw new BadRequestException('Chỉ có thể thay đổi cấu trúc khi đang đàm phán.');
+    }
+
+    const changes = okr.proposedChanges || {};
+    if (!changes.originalStructure) {
+      changes.originalStructure = okr.keyResults;
+    }
+
+    // Merge local comments if any
+    if (localComments) {
+      for (const [itemId, messages] of Object.entries(localComments)) {
+        if (!changes[itemId]) changes[itemId] = [];
+        changes[itemId].push(...messages);
+      }
+    }
+
+    okr.keyResults = keyResults;
+    okr.proposedChanges = changes;
+    okr.status = 'NEGOTIATING'; // Stays in negotiating state
+
+    await this.userOkrRepo.save(okr);
+    return okr;
+  }
+
   // --- GIA HẠN DEADLINE (Dành cho Trưởng khoa) ---
 
   async extendDeadline(id: string, newDeadline: Date) {
