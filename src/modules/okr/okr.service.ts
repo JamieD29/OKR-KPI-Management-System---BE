@@ -180,7 +180,14 @@ export class OkrService {
     };
 
     if (okr.keyResults) {
+      const changes = okr.proposedChanges || {};
+      if (!changes.originalStructure) {
+        // Clone sâu keyResults trước khi sửa
+        changes.originalStructure = JSON.parse(JSON.stringify(okr.keyResults));
+      }
+
       updateRecursive(okr.keyResults);
+      okr.proposedChanges = changes;
       // Recalculate if necessary, but maxScore is just a structural thing
       // until self-report happens.
     }
@@ -204,7 +211,14 @@ export class OkrService {
       );
     }
 
+    // Sao lưu cấu trúc cũ trước khi bị ghi đè, nếu chưa sao lưu
+    const changes = okr.proposedChanges || {};
+    if (!changes.originalStructure) {
+      changes.originalStructure = okr.keyResults; // Copy reference hoặc deep clone (DB JSONB sẽ tự xử lý)
+    }
+
     okr.keyResults = keyResults;
+    okr.proposedChanges = changes;
     okr.status = 'NEGOTIATING';
     
     await this.userOkrRepo.save(okr);
@@ -242,8 +256,12 @@ export class OkrService {
     if (!okr) throw new NotFoundException('OKR not found');
 
     okr.status = 'ACCEPTED';
-    // KHÔNG ghi đè proposedChanges vào keyResults nữa vì cấu trúc đã khác
-    // okr.proposedChanges = null; // Có thể giữ lại lịch sử chat hoặc xóa đi tuỳ ý. Tạm thời giữ lại để làm minh chứng.
+    
+    // Xóa bản sao lưu gốc vì đã chấp nhận bản mới
+    if (okr.proposedChanges && okr.proposedChanges.originalStructure) {
+      delete okr.proposedChanges.originalStructure;
+      // KHÔNG gán proposedChanges = null để giữ lại lịch sử comment
+    }
 
     await this.userOkrRepo.save(okr);
     await this.notificationService.create(
@@ -258,7 +276,14 @@ export class OkrService {
     if (!okr) throw new NotFoundException('OKR not found');
 
     okr.status = 'PENDING';
-    okr.proposedChanges = null;
+    
+    // Phục hồi lại bản gốc nếu có sao lưu
+    if (okr.proposedChanges && okr.proposedChanges.originalStructure) {
+      okr.keyResults = okr.proposedChanges.originalStructure;
+      delete okr.proposedChanges.originalStructure;
+    }
+
+    // KHÔNG gán proposedChanges = null để giữ lại lịch sử comment làm minh chứng
 
     await this.userOkrRepo.save(okr);
     await this.notificationService.create(
