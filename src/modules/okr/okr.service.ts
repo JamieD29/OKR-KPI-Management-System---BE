@@ -233,7 +233,13 @@ export class OkrService {
     return okr;
   }
 
-  async managerUpdateOkrStructure(id: string, managerId: string, keyResults: any[], localComments?: Record<string, any[]>) {
+  async managerUpdateOkrStructure(
+    id: string, 
+    managerId: string, 
+    keyResults: any[], 
+    localComments?: Record<string, any[]>,
+    originalStructure?: any[]
+  ) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
     
@@ -242,7 +248,9 @@ export class OkrService {
     }
 
     const changes = okr.proposedChanges || {};
-    if (!changes.originalStructure) {
+    if (originalStructure) {
+      changes.originalStructure = originalStructure;
+    } else if (!changes.originalStructure) {
       changes.originalStructure = okr.keyResults;
     }
 
