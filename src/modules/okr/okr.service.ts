@@ -196,7 +196,7 @@ export class OkrService {
     return okr;
   }
 
-  async updateOkrStructure(id: string, userId: string, keyResults: any[]) {
+  async updateOkrStructure(id: string, userId: string, keyResults: any[], localComments?: Record<string, any[]>) {
     const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
     if (!okr) throw new NotFoundException('OKR not found');
     
@@ -215,6 +215,14 @@ export class OkrService {
     const changes = okr.proposedChanges || {};
     if (!changes.originalStructure) {
       changes.originalStructure = okr.keyResults; // Copy reference hoặc deep clone (DB JSONB sẽ tự xử lý)
+    }
+
+    // Merge local comments if any
+    if (localComments) {
+      for (const [itemId, messages] of Object.entries(localComments)) {
+        if (!changes[itemId]) changes[itemId] = [];
+        changes[itemId].push(...messages);
+      }
     }
 
     okr.keyResults = keyResults;
