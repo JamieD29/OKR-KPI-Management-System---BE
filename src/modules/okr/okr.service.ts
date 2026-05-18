@@ -459,6 +459,21 @@ export class OkrService {
     return okr;
   }
 
+  async draftSelfReport(id: string, userId: string, selfReportData: any) {
+    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    if (!okr) throw new NotFoundException('OKR not found');
+    if (okr.status !== 'ACCEPTED') {
+      throw new BadRequestException('OKR chưa được chấp nhận, không thể lưu nháp.');
+    }
+
+    okr.selfReportData = selfReportData;
+    // Calculate score so the UI can show updated points immediately without submitting
+    okr.totalScore = this.calculateOkrScore(okr.keyResults, selfReportData);
+
+    await this.userOkrRepo.save(okr);
+    return okr;
+  }
+
   // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
 
   async getSubmittedOkrs(status: string = 'SUBMITTED') {
