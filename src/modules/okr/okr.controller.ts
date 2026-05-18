@@ -88,6 +88,11 @@ export class OkrController {
     return this.okrService.submitSelfReport(id, req.user.id || req.user.sub, body.selfReportData);
   }
 
+  @Put(':id/draft-report')
+  async draftSelfReport(@Param('id') id: string, @Body() body: any, @Request() req: any) {
+    return this.okrService.draftSelfReport(id, req.user.id || req.user.sub, body.selfReportData);
+  }
+
   // --- DEAN REVIEW SUBMITTED ---
 
   @Get('submitted')
