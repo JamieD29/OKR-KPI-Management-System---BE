@@ -214,7 +214,7 @@ export class OkrService {
     // Sao lưu cấu trúc cũ trước khi bị ghi đè, nếu chưa sao lưu
     const changes = okr.proposedChanges || {};
     if (!changes.originalStructure) {
-      changes.originalStructure = okr.keyResults; // Copy reference hoặc deep clone (DB JSONB sẽ tự xử lý)
+      changes.originalStructure = JSON.parse(JSON.stringify(okr.keyResults));
     }
 
     // Merge local comments if any
