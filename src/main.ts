@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('api');
 
   // 👈 THÊM SESSION ĐỂ HỖ TRỢ PKCE CHO MICROSOFT LOGIN
   app.use(
@@ -39,7 +40,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api/document', app, document);
 
   const allowedOrigins = [
     'http://localhost:5173',
