@@ -95,6 +95,11 @@ export class OkrController {
 
   // --- DEAN REVIEW SUBMITTED ---
 
+  @Get('accepted')
+  async getAcceptedOkrs() {
+    return this.okrService.getSubmittedOkrs('ACCEPTED');
+  }
+
   @Get('submitted')
   async getSubmittedOkrs() {
     return this.okrService.getSubmittedOkrs('SUBMITTED');
