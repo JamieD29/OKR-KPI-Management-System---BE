@@ -16,7 +16,7 @@ export class OkrTemplateService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private notificationService: NotificationService,
-  ) {}
+  ) { }
 
   // Trả về danh sách Chức danh nghề nghiệp từ enum JobTitle
   getJobTitles() {
@@ -73,9 +73,9 @@ export class OkrTemplateService {
     if (!structure || structure.length === 0) {
       throw new BadRequestException('Template phải có ít nhất 1 Mục tiêu (Objective).');
     }
-    
+
     const totalMaxScore = this.validateScoresRecursively(structure, true);
-    
+
     if (totalMaxScore !== 100) {
       throw new BadRequestException(`Tổng điểm (maxScore) của tất cả các Nhiệm vụ (Objective) phải chính xác bằng 100. Hiện tại đang là ${totalMaxScore}.`);
     }

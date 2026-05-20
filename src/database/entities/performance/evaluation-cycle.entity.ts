@@ -39,6 +39,9 @@ export class EvaluationCycle {
   @Column({ type: 'date', nullable: true })
   endDate: Date;
 
+  @Column({ name: 'is_del', default: false })
+  isDel: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 

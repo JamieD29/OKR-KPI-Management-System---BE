@@ -17,7 +17,10 @@ export class PerformanceService {
 
   // Lấy danh sách kỳ đánh giá
   async getCycles() {
-    return this.cycleRepo.find({ order: { createdAt: 'DESC' } });
+    return this.cycleRepo.find({
+      where: { isDel: false },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   // Tạo kỳ đánh giá mới
@@ -55,7 +58,7 @@ export class PerformanceService {
 
   // Đổi trạng thái kỳ đánh giá (OPEN / CLOSED)
   async toggleCycleStatus(id: string, status: string) {
-    const cycle = await this.cycleRepo.findOne({ where: { id } });
+    const cycle = await this.cycleRepo.findOne({ where: { id, isDel: false } });
     if (!cycle) throw new NotFoundException('Không tìm thấy kỳ đánh giá');
 
     cycle.status = status as any;
@@ -74,5 +77,21 @@ export class PerformanceService {
       cycle,
       isPast, // Frontend sẽ dùng flag này để hiển thị cảnh báo
     };
+  }
+
+  // Xóa (soft-delete) kỳ đánh giá
+  async deleteCycle(id: string) {
+    const cycle = await this.cycleRepo.findOne({ where: { id, isDel: false } });
+    if (!cycle) throw new NotFoundException('Không tìm thấy kỳ đánh giá');
+
+    if (cycle.status === EvaluationStatus.OPEN) {
+      throw new BadRequestException(
+        'Không thể xóa kỳ đánh giá đang mở. Vui lòng đóng kỳ trước khi xóa.',
+      );
+    }
+
+    cycle.isDel = true;
+    await this.cycleRepo.save(cycle);
+    return { message: 'Xóa kỳ đánh giá thành công' };
   }
 }

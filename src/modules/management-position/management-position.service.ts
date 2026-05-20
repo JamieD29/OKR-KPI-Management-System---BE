@@ -94,7 +94,7 @@ export class ManagementPositionService {
   async remove(id: string) {
     // Kiểm tra xem có cycle nào đang OPEN không
     const activeCycle = await this.cycleRepository.findOne({
-      where: { status: EvaluationStatus.OPEN },
+      where: { status: EvaluationStatus.OPEN, isDel: false },
     });
     if (activeCycle) {
       throw new ConflictException(

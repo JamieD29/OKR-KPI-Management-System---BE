@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Put, Param } from '@nestjs/common';
+import { Controller, Post, Get, Body, Put, Param, Delete } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -82,5 +82,19 @@ export class PerformanceController {
   @ApiInternalServerErrorResponse()
   async toggleCycleStatus(@Param('id') id: string, @Body() body: ToggleCycleStatusDto) {
     return this.performanceService.toggleCycleStatus(id, body.status);
+  }
+
+  @Delete('admin/cycles/:id')
+  @ApiOperation({
+    summary: 'Xóa (soft-delete) kỳ đánh giá',
+    description:
+      'Đổi trạng thái isDel thành true để ẩn đi trên giao diện. Không thể xóa kỳ đang OPEN.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'UUID của kỳ đánh giá.' })
+  @ApiOkResponse({ description: 'Thông báo xóa thành công' })
+  @ApiNotFoundResponse({ description: 'Không tìm thấy kỳ đánh giá' })
+  @ApiBadRequestResponse({ description: 'Không thể xóa kỳ đang mở' })
+  async deleteCycle(@Param('id') id: string) {
+    return this.performanceService.deleteCycle(id);
   }
 }
