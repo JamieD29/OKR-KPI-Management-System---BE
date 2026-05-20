@@ -29,10 +29,13 @@ async function bootstrap() {
     }),
   );
 
+  const PORT = Number(process.env.PORT) || 3001;
+
   const config = new DocumentBuilder()
     .setTitle('OKR KPI Management System API')
     .setDescription('The OKR KPI Management System API description')
     .setVersion('1.0')
+    .addServer(`http://localhost:${PORT}`)
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
@@ -41,6 +44,7 @@ async function bootstrap() {
   const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
+    `http://localhost:${PORT}`, // Swagger UI cùng host với backend
     'https://performance-management-system-fe.vercel.app',
   ];
 
@@ -50,11 +54,13 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Cho phép nếu không có origin (như Postman) hoặc origin nằm trong danh sách
+      // Cho phép nếu không có origin (như Postman / Swagger UI same-origin) hoặc origin nằm trong danh sách
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        callback(new Error('Not allowed by CORS'));
+        // Log để dễ debug khi bị từ chối
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(new Error(`Not allowed by CORS: ${origin}`));
       }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
@@ -62,6 +68,6 @@ async function bootstrap() {
   });
   // --- KẾT THÚC ĐOẠN CẦN THÊM ---
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(PORT);
 }
 bootstrap();
