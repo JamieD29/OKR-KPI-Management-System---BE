@@ -68,6 +68,7 @@ export class OkrService {
         (okr.status === 'PENDING' || okr.status === 'NEGOTIATING')
       ) {
         okr.status = 'ACCEPTED';
+        okr.acceptedAt = now;
         // keyResults giữ nguyên phiên bản mới nhất đang có trong DB
         await this.userOkrRepo.save(okr);
 
@@ -123,6 +124,7 @@ export class OkrService {
     const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
     if (!okr) throw new NotFoundException('OKR not found');
     okr.status = 'ACCEPTED';
+    okr.acceptedAt = new Date();
     return this.userOkrRepo.save(okr);
   }
 
@@ -301,6 +303,7 @@ export class OkrService {
     if (!okr) throw new NotFoundException('OKR not found');
 
     okr.status = 'ACCEPTED';
+    okr.acceptedAt = new Date();
     
     // Xóa bản sao lưu gốc vì đã chấp nhận bản mới
     if (okr.proposedChanges && okr.proposedChanges.originalStructure) {

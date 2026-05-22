@@ -51,6 +51,9 @@ export class UserOkr {
   @Column({ type: 'timestamp', nullable: true })
   deadline: Date | null;
 
+  @Column({ type: 'timestamp', nullable: true })
+  acceptedAt: Date | null;
+
   // Dữ liệu tự khai từ user: { [krId]: { quantity: number, evidence: string } }
   @Column({ type: 'jsonb', nullable: true })
   selfReportData: any;
