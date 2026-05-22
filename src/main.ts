@@ -36,6 +36,7 @@ async function bootstrap() {
     .setTitle('OKR KPI Management System API')
     .setDescription('The OKR KPI Management System API description')
     .setVersion('1.0')
+    .addServer('/')
     .addServer(`http://localhost:${PORT}`)
     .addBearerAuth()
     .build();
