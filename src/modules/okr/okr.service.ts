@@ -173,11 +173,8 @@ export class OkrService {
 
     okr.proposedChanges = changes;
     
-    if (sender === 'USER') {
-      okr.status = 'NEGOTIATING';
-    } else {
-      okr.status = 'PENDING';
-    }
+    // Không tự động đổi status khi gửi comment.
+    // Status chỉ thay đổi khi user bấm "Gửi thay đổi & Yêu cầu duyệt" hoặc "Gửi yêu cầu duyệt đề xuất".
 
     await this.userOkrRepo.save(okr);
     return okr;
@@ -287,7 +284,7 @@ export class OkrService {
 
     okr.keyResults = keyResults;
     okr.proposedChanges = changes;
-    okr.status = 'NEGOTIATING'; // Stays in negotiating state
+    okr.status = 'PENDING'; // Manager đã phản hồi, chờ user xác nhận
 
     await this.userOkrRepo.save(okr);
     return okr;
