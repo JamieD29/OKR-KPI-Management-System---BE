@@ -114,7 +114,7 @@ export class OkrService {
         { status: 'NEGOTIATING' },
         { status: 'PENDING' },
       ],
-      relations: ['user', 'user.department', 'user.managementPosition'],
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { createdAt: 'DESC' },
     });
 
@@ -500,7 +500,7 @@ export class OkrService {
   async getSubmittedOkrs(status: string = 'SUBMITTED') {
     return this.userOkrRepo.find({
       where: { status },
-      relations: ['user', 'user.department', 'user.managementPosition'],
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
   }
