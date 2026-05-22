@@ -128,6 +128,24 @@ export class OkrService {
     return this.userOkrRepo.save(okr);
   }
 
+  async sendForApproval(id: string, userId: string) {
+    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    if (!okr) throw new NotFoundException('OKR not found');
+
+    if (this.isDeadlineExpired(okr)) {
+      throw new BadRequestException(
+        `Đã hết hạn đàm phán (${new Date(okr.deadline!).toLocaleDateString('vi-VN')}). Không thể gửi yêu cầu duyệt.`,
+      );
+    }
+
+    if (okr.status !== 'PENDING' && okr.status !== 'NEGOTIATING') {
+      throw new BadRequestException('Chỉ có thể gửi yêu cầu duyệt khi đang đàm phán hoặc chờ phản hồi.');
+    }
+
+    okr.status = 'NEGOTIATING';
+    return this.userOkrRepo.save(okr);
+  }
+
   async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');

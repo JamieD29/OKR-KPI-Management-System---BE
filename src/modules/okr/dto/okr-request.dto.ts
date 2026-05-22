@@ -42,8 +42,9 @@ export class CreateDepartmentOkrDto {
 }
 
 export class OkrChatBodyDto {
-  @ApiProperty({ format: 'uuid' })
-  @IsUUID('4')
+  @ApiProperty({ description: 'ID of the item (can be a UUID or a custom string identifier)' })
+  @IsString()
+  @IsNotEmpty()
   itemId: string;
 
   @ApiProperty({ example: 'Đề nghị điều chỉnh trọng số mục A.' })
@@ -74,8 +75,9 @@ export class ItemScoreUpdatesDto {
 }
 
 export class EditItemBodyDto {
-  @ApiProperty({ format: 'uuid' })
-  @IsUUID('4')
+  @ApiProperty({ description: 'ID of the item (can be a UUID or a custom string identifier)' })
+  @IsString()
+  @IsNotEmpty()
   itemId: string;
 
   @ApiProperty({ type: ItemScoreUpdatesDto })

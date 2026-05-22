@@ -117,6 +117,19 @@ export class OkrController {
     return this.okrService.acceptOkr(id, req.user.id || req.user.sub);
   }
 
+  @Put(':id/send-for-approval')
+  @ApiOperation({
+    summary: 'User gửi yêu cầu duyệt OKR',
+    description: 'Chuyển trạng thái OKR thành NEGOTIATING để quản lý thấy trong tab Duyệt đề xuất.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiOkResponse({ type: UserOkrSwaggerDto })
+  @ApiNotFoundResponse({ description: '*OKR not found*.' })
+  @ApiInternalServerErrorResponse()
+  async sendForApproval(@Param('id') id: string, @Request() req: any) {
+    return this.okrService.sendForApproval(id, req.user.id || req.user.sub);
+  }
+
   @Post(':id/chat')
   @ApiOperation({
     summary: 'Trao đổi / chat trên một mục OKR',
