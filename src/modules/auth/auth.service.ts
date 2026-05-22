@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException, ForbiddenException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { SystemLogsService } from '../system-logs/system-logs.service';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -6,6 +6,8 @@ import { Repository } from 'typeorm';
 import { User } from '../../database/entities/user.entity';
 import { AllowedDomain } from '../../database/entities/allowed-domain.entity';
 import { Role } from '../../database/entities/role.entity';
+import { ManagementPosition } from '../../database/entities/management-position.entity';
+import { Department } from '../../database/entities/department.entity';
 
 @Injectable()
 export class AuthService {
@@ -171,5 +173,83 @@ export class AuthService {
       });
     }
     return { message: 'Đăng xuất thành công' };
+  }
+
+  // 🧪 HÀM MỚI: BYPASS LOGIN CHO AUTOMATION TEST
+  async bypassLogin(
+    email: string,
+    roleSlug?: string,
+    name?: string,
+    managementPositionSlug?: string,
+    departmentName?: string,
+  ) {
+    if (!email) {
+      throw new BadRequestException('Email is required');
+    }
+
+    let user = await this.userRepository.findOne({
+      where: { email },
+      relations: ['roles', 'department', 'managementPosition'],
+    });
+
+    if (!user) {
+      // Tự động tạo user mới cho môi trường test
+      const slug = (roleSlug || 'USER').toUpperCase();
+      let role = await this.roleRepository.findOne({ where: { slug } });
+      if (!role) {
+        role = await this.roleRepository.save({
+          name: slug === 'ADMIN' ? 'Admin' : 'User',
+          slug,
+          description: 'Auto generated for testing',
+        });
+      }
+
+      // Tìm chức vụ quản lý nếu được yêu cầu
+      let mPosition: ManagementPosition | null = null;
+      if (managementPositionSlug) {
+        mPosition = await this.userRepository.manager.findOne(ManagementPosition, {
+          where: { slug: managementPositionSlug.toUpperCase() },
+        });
+      }
+
+      // Tìm bộ môn / phòng ban
+      let dept: Department | null = null;
+      if (departmentName) {
+        dept = await this.userRepository.manager.findOne(Department, {
+          where: { name: departmentName },
+        });
+      }
+
+      // Nếu không chỉ định bộ môn, gán mặc định bộ môn đầu tiên trong DB để tester dễ test
+      if (!dept) {
+        const allDepts = await this.userRepository.manager.find(Department);
+        if (allDepts.length > 0) {
+          dept = allDepts[0];
+        }
+      }
+
+      const newUser = this.userRepository.create({
+        email,
+        name: name || email.split('@')[0],
+        isActive: true,
+        roles: [role],
+        profileCompleted: true,
+        managementPosition: mPosition || undefined,
+        department: dept || undefined,
+        jobTitle: 'Giảng viên' as any, // Chức danh mặc định
+      });
+
+      user = await this.userRepository.save(newUser);
+      console.log(
+        `[TESTING] Auto created mock user for testing: ${email} (Role: ${slug}, Position: ${managementPositionSlug || 'None'})`,
+      );
+    }
+
+    if (!user) {
+      throw new InternalServerErrorException('Failed to retrieve or create user');
+    }
+
+    user['loginProvider'] = 'AutomationBypass';
+    return this.login(user);
   }
 }

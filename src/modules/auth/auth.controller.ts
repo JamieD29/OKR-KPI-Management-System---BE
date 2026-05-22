@@ -1,4 +1,4 @@
-import { Controller, Get, Post, UseGuards, Req, Res, UseFilters } from '@nestjs/common';
+import { Controller, Get, Post, UseGuards, Req, Res, UseFilters, Body, ForbiddenException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiTags,
@@ -295,5 +295,31 @@ export class AuthController {
   })
   async logout(@Req() req) {
     return this.authService.logout(req.user);
+  }
+
+  // 🧪 ENDPOINT MỚI: BYPASS LOGIN CHO AUTOMATION TEST
+  @Post('bypass')
+  @ApiOperation({
+    summary: 'Bypass login cho automation testing (không cần SSO Google/Microsoft)',
+    description:
+      'Chỉ chạy ở môi trường development/test (hoặc khi ALLOW_BYPASS_IN_PROD=true). Nhận email, role (VD: ADMIN/USER), name, managementPositionSlug (VD: DEAN/VICE_DEAN), departmentName.',
+  })
+  async bypassLogin(@Body() body: any) {
+    // Bảo mật: Không chạy trên Production trừ khi cấu hình rõ ràng
+    if (
+      process.env.NODE_ENV === 'production' &&
+      process.env.ALLOW_BYPASS_IN_PROD !== 'true'
+    ) {
+      throw new ForbiddenException('Bypass login is disabled in production.');
+    }
+
+    const { email, role, name, managementPositionSlug, departmentName } = body;
+    return this.authService.bypassLogin(
+      email,
+      role,
+      name,
+      managementPositionSlug,
+      departmentName,
+    );
   }
 }
