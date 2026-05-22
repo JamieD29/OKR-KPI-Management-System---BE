@@ -110,14 +110,17 @@ export class OkrService {
 
   async getPendingApproval() {
     const okrs = await this.userOkrRepo.find({
-      where: { status: 'NEGOTIATING' },
+      where: [
+        { status: 'NEGOTIATING' },
+        { status: 'PENDING' },
+      ],
       relations: ['user', 'user.department', 'user.managementPosition'],
       order: { createdAt: 'DESC' },
     });
 
-    // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn NEGOTIATING
+    // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn đang đàm phán
     await this.checkAndAutoAcceptExpired(okrs);
-    return okrs.filter(o => o.status === 'NEGOTIATING');
+    return okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
   }
 
   async acceptOkr(id: string, userId: string) {
