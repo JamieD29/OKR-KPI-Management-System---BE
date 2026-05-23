@@ -607,10 +607,12 @@ export class OkrService {
     // Tìm UserOkr phù hợp nhất (ưu tiên COMPLETED)
     const okr = await this.findBestUserOkr(userId, cycleId);
 
+    if (!okr) {
+      return null;
+    }
+
     // Build evaluationData từ OKR Template đã giao cho user
-    const { evaluationData, selfScoreTotal, principalScoreTotal } = okr
-      ? this.buildEvaluationDataFromOkr(okr)
-      : { evaluationData: [], selfScoreTotal: 0, principalScoreTotal: 0 };
+    const { evaluationData, selfScoreTotal, principalScoreTotal } = this.buildEvaluationDataFromOkr(okr);
 
     // Lưu tên OKR/Template để FE hiển thị
     const okrObjectiveName = okr?.objective || '';
