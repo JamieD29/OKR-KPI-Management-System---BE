@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { Objective } from '../../database/entities/objective.entity';
 import { UserOkr } from '../../database/entities/performance/user-okr.entity';
 import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
+import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance/evaluation-cycle.entity';
 import { NotificationService } from '../notification/notification.service';
 
 @Injectable()
@@ -533,24 +534,29 @@ export class OkrService {
    * Tìm UserOkr phù hợp nhất cho user:
    * Ưu tiên: COMPLETED (đã chốt điểm) > SUBMITTED > ACCEPTED > PENDING
    */
-  private async findBestUserOkr(userId: string): Promise<UserOkr | null> {
+  private async findBestUserOkr(userId: string, cycleId?: string): Promise<UserOkr | null> {
+    const whereClause: any = { userId };
+    if (cycleId) {
+      whereClause.cycleId = cycleId;
+    }
+
     // Ưu tiên tìm OKR đã COMPLETED (manager đã chốt điểm)
     const completed = await this.userOkrRepo.findOne({
-      where: { userId, status: 'COMPLETED' },
+      where: { ...whereClause, status: 'COMPLETED' },
       order: { updatedAt: 'DESC' },
     });
     if (completed) return completed;
 
     // Fallback: OKR đã SUBMITTED (user đã tự khai)
     const submitted = await this.userOkrRepo.findOne({
-      where: { userId, status: 'SUBMITTED' },
+      where: { ...whereClause, status: 'SUBMITTED' },
       order: { updatedAt: 'DESC' },
     });
     if (submitted) return submitted;
 
     // Fallback cuối: bất kỳ OKR nào
     return this.userOkrRepo.findOne({
-      where: { userId },
+      where: whereClause,
       order: { updatedAt: 'DESC' },
     });
   }
@@ -587,14 +593,19 @@ export class OkrService {
     return { evaluationData, selfScoreTotal, principalScoreTotal };
   }
 
-  async getMyEvaluationForm(userId: string) {
+  async getMyEvaluationForm(userId: string, cycleId?: string) {
+    const whereClause: any = { userId };
+    if (cycleId) {
+      whereClause.cycleId = cycleId;
+    }
+
     let form = await this.userEvaluationRepo.findOne({
-      where: { userId },
-      relations: ['user', 'user.department', 'user.managementPosition'],
+      where: whereClause,
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
     });
 
     // Tìm UserOkr phù hợp nhất (ưu tiên COMPLETED)
-    const okr = await this.findBestUserOkr(userId);
+    const okr = await this.findBestUserOkr(userId, cycleId);
 
     // Build evaluationData từ OKR Template đã giao cho user
     const { evaluationData, selfScoreTotal, principalScoreTotal } = okr
@@ -605,25 +616,39 @@ export class OkrService {
     const okrObjectiveName = okr?.objective || '';
 
     if (!form) {
+      let finalCycleId: string | undefined = cycleId || okr?.cycleId || undefined;
+      if (!finalCycleId) {
+        const openCycle = await this.userOkrRepo.manager.getRepository(EvaluationCycle).findOne({
+          where: { status: EvaluationStatus.OPEN, isDel: false },
+        });
+        if (openCycle) {
+          finalCycleId = openCycle.id;
+        }
+      }
+
       form = this.userEvaluationRepo.create({
         userId,
         status: 'PENDING_EVALUATION',
         evaluationData,
         selfScoreTotal,
         principalScoreTotal,
+        cycleId: finalCycleId,
       });
       await this.userEvaluationRepo.save(form);
 
       // Reload với relations
       form = await this.userEvaluationRepo.findOne({
         where: { id: form.id },
-        relations: ['user', 'user.department', 'user.managementPosition'],
+        relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       });
     } else {
       // Luôn cập nhật evaluationData mới nhất từ OKR
       form.evaluationData = evaluationData;
       form.selfScoreTotal = selfScoreTotal;
       form.principalScoreTotal = principalScoreTotal;
+      if (cycleId && !form.cycleId) {
+        form.cycleId = cycleId;
+      }
       await this.userEvaluationRepo.save(form);
     }
 
@@ -636,11 +661,15 @@ export class OkrService {
   }
 
   async submitMyEvaluationForm(userId: string, body: any) {
-    const form = await this.getMyEvaluationForm(userId);
+    const form = await this.getMyEvaluationForm(userId, body.cycleId);
     if (!form) throw new NotFoundException('Evaluation Form not found');
 
     // Cập nhật phần tự nhận xét
-    const entity = await this.userEvaluationRepo.findOne({ where: { userId } });
+    const whereClause: any = { userId };
+    if (body.cycleId) {
+      whereClause.cycleId = body.cycleId;
+    }
+    const entity = await this.userEvaluationRepo.findOne({ where: whereClause });
     if (!entity) throw new NotFoundException('Evaluation Form not found');
 
     entity.selfComment = body.selfComment;
@@ -653,7 +682,7 @@ export class OkrService {
 
   async getSubmittedEvaluations() {
     return this.userEvaluationRepo.find({
-      relations: ['user', 'user.department', 'user.managementPosition'],
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
   }
@@ -679,7 +708,7 @@ export class OkrService {
       this.buildEvaluationDataFromOkr(okr);
 
     let form = await this.userEvaluationRepo.findOne({
-      where: { userId: okr.userId },
+      where: { userId: okr.userId, cycleId: okr.cycleId },
     });
 
     if (!form) {
@@ -689,6 +718,7 @@ export class OkrService {
         evaluationData,
         selfScoreTotal,
         principalScoreTotal,
+        cycleId: okr.cycleId,
       });
     } else {
       // Chỉ cập nhật nếu phiếu chưa bị EVALUATED (manager chưa xếp loại cuối)

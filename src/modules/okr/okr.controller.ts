@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Put, Body, Param, UseGuards, Request, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -304,8 +304,8 @@ export class OkrController {
   })
   @ApiOkResponse({ type: MyEvaluationFormResponseDto })
   @ApiInternalServerErrorResponse()
-  async getMyEvaluationForm(@Request() req) {
-    return this.okrService.getMyEvaluationForm(req.user.id);
+  async getMyEvaluationForm(@Request() req, @Query('cycleId') cycleId?: string) {
+    return this.okrService.getMyEvaluationForm(req.user.id, cycleId);
   }
 
   @Post('evaluations/my/submit')
