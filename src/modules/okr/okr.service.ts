@@ -594,9 +594,29 @@ export class OkrService {
   }
 
   async getMyEvaluationForm(userId: string, cycleId?: string) {
+    let targetCycleId = cycleId;
+
+    if (!targetCycleId) {
+      const openCycle = await this.userEvaluationRepo.manager.getRepository(EvaluationCycle).findOne({
+        where: { status: EvaluationStatus.OPEN, isDel: false },
+        order: { createdAt: 'DESC' },
+      });
+      if (openCycle) {
+        targetCycleId = openCycle.id;
+      } else {
+        const lastCycle = await this.userEvaluationRepo.manager.getRepository(EvaluationCycle).findOne({
+          where: { isDel: false },
+          order: { createdAt: 'DESC' },
+        });
+        if (lastCycle) {
+          targetCycleId = lastCycle.id;
+        }
+      }
+    }
+
     const whereClause: any = { userId };
-    if (cycleId) {
-      whereClause.cycleId = cycleId;
+    if (targetCycleId) {
+      whereClause.cycleId = targetCycleId;
     }
 
     let form = await this.userEvaluationRepo.findOne({
@@ -604,10 +624,17 @@ export class OkrService {
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
     });
 
-    // Tìm UserOkr phù hợp nhất (ưu tiên COMPLETED)
-    const okr = await this.findBestUserOkr(userId, cycleId);
+    // Tìm UserOkr phù hợp nhất
+    const okr = await this.findBestUserOkr(userId, targetCycleId);
 
     if (!okr) {
+      if (form) {
+        return {
+          ...form,
+          okrObjectiveName: '',
+          okrStatus: null,
+        };
+      }
       return null;
     }
 
@@ -618,23 +645,13 @@ export class OkrService {
     const okrObjectiveName = okr?.objective || '';
 
     if (!form) {
-      let finalCycleId: string | undefined = cycleId || okr?.cycleId || undefined;
-      if (!finalCycleId) {
-        const openCycle = await this.userOkrRepo.manager.getRepository(EvaluationCycle).findOne({
-          where: { status: EvaluationStatus.OPEN, isDel: false },
-        });
-        if (openCycle) {
-          finalCycleId = openCycle.id;
-        }
-      }
-
       form = this.userEvaluationRepo.create({
         userId,
         status: 'PENDING_EVALUATION',
         evaluationData,
         selfScoreTotal,
         principalScoreTotal,
-        cycleId: finalCycleId,
+        cycleId: targetCycleId || okr?.cycleId || undefined,
       });
       await this.userEvaluationRepo.save(form);
 
@@ -644,12 +661,14 @@ export class OkrService {
         relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       });
     } else {
-      // Luôn cập nhật evaluationData mới nhất từ OKR
-      form.evaluationData = evaluationData;
-      form.selfScoreTotal = selfScoreTotal;
-      form.principalScoreTotal = principalScoreTotal;
-      if (cycleId && !form.cycleId) {
-        form.cycleId = cycleId;
+      // Chỉ cập nhật evaluationData từ OKR nếu phiếu chưa ở trạng thái chốt EVALUATED
+      if (form.status !== 'EVALUATED') {
+        form.evaluationData = evaluationData;
+        form.selfScoreTotal = selfScoreTotal;
+        form.principalScoreTotal = principalScoreTotal;
+      }
+      if (targetCycleId && !form.cycleId) {
+        form.cycleId = targetCycleId;
       }
       await this.userEvaluationRepo.save(form);
     }
