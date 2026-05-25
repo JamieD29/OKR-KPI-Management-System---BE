@@ -41,6 +41,18 @@ import {
 export class OkrController {
   constructor(private readonly okrService: OkrService) {}
 
+  @Get('dean-dashboard')
+  @ApiOperation({
+    summary: 'Dashboard tổng hợp cho Trưởng khoa',
+    description:
+      'Trả về dữ liệu tổng hợp gồm: summary counts, thống kê bộ môn, xếp hạng cá nhân, phân bổ xếp loại, timeline OKR, và action items.',
+  })
+  @ApiOkResponse({ description: 'Dữ liệu dashboard tổng hợp' })
+  @ApiInternalServerErrorResponse()
+  async getDeanDashboard() {
+    return this.okrService.getDeanDashboard();
+  }
+
   @Post('department')
   @ApiOperation({
     summary: 'Tạo OKR cấp bộ môn (legacy Objective)',

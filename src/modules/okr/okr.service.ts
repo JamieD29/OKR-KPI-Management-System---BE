@@ -753,4 +753,265 @@ export class OkrService {
     await this.userEvaluationRepo.save(form);
   }
 
+  // ==========================================
+  // --- DEAN DASHBOARD: API TỔNG HỢP ---
+  // ==========================================
+
+  async getDeanDashboard() {
+    // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
+    const cycles = await this.userEvaluationRepo.manager
+      .getRepository(EvaluationCycle)
+      .find({ where: { isDel: false }, order: { createdAt: 'DESC' } });
+
+    const openCycle = cycles.find(c => c.status === EvaluationStatus.OPEN);
+    const currentCycle = openCycle || cycles[0] || null;
+
+    // Tính tiến độ kỳ
+    let cycleProgressPercent = 0;
+    if (currentCycle?.startDate && currentCycle?.endDate) {
+      const now = new Date().getTime();
+      const start = new Date(currentCycle.startDate).getTime();
+      const end = new Date(currentCycle.endDate).getTime();
+      if (end > start) {
+        cycleProgressPercent = Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
+      }
+    }
+
+    // Tính số ngày còn lại
+    let daysRemaining: number | null = null;
+    if (currentCycle?.endDate) {
+      const diff = new Date(currentCycle.endDate).getTime() - new Date().getTime();
+      daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    }
+
+    // 2. Lấy TẤT CẢ OKR (kèm user, department)
+    const allOkrs = await this.userOkrRepo.find({
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
+      order: { updatedAt: 'DESC' },
+    });
+
+    // 3. Lấy tất cả phiếu đánh giá
+    const allEvaluations = await this.userEvaluationRepo.find({
+      relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
+      order: { updatedAt: 'DESC' },
+    });
+
+    // 4. Lấy tất cả departments
+    const departments = await this.userEvaluationRepo.manager
+      .getRepository('Department')
+      .find({ relations: ['users'], order: { name: 'ASC' } }) as any[];
+
+    // 5. Tổng hợp SUMMARY
+    const statusCounts: Record<string, number> = {
+      PENDING: 0, NEGOTIATING: 0, ACCEPTED: 0, SUBMITTED: 0, COMPLETED: 0, REJECTED: 0,
+    };
+    for (const okr of allOkrs) {
+      if (statusCounts[okr.status] !== undefined) {
+        statusCounts[okr.status]++;
+      }
+    }
+
+    const totalStaff = departments.reduce((sum: number, d: any) => sum + (d.users ? d.users.length : 0), 0);
+
+    const summary = {
+      totalStaff,
+      totalOkrs: allOkrs.length,
+      pendingApproval: statusCounts.PENDING + statusCounts.NEGOTIATING,
+      awaitingReview: statusCounts.SUBMITTED,
+      completed: statusCounts.COMPLETED,
+      accepted: statusCounts.ACCEPTED,
+      notStarted: totalStaff - allOkrs.length, // Người chưa được giao OKR
+    };
+
+    // 6. OKR theo trạng thái
+    const okrsByStatus = statusCounts;
+
+    // 7. Thống kê theo bộ môn
+    const deptMap: Record<string, {
+      deptId: string; deptName: string; deptCode: string; memberCount: number;
+      completedCount: number; submittedCount: number; acceptedCount: number; pendingCount: number;
+      totalScore: number; scoreCount: number;
+    }> = {};
+
+    for (const dept of departments) {
+      deptMap[dept.id] = {
+        deptId: dept.id,
+        deptName: dept.name,
+        deptCode: dept.code,
+        memberCount: dept.users ? dept.users.length : 0,
+        completedCount: 0,
+        submittedCount: 0,
+        acceptedCount: 0,
+        pendingCount: 0,
+        totalScore: 0,
+        scoreCount: 0,
+      };
+    }
+
+    for (const okr of allOkrs) {
+      const deptId = okr.user?.department?.id;
+      if (!deptId || !deptMap[deptId]) continue;
+      
+      if (okr.status === 'COMPLETED') {
+        deptMap[deptId].completedCount++;
+        if (okr.managerScore !== null && okr.managerScore !== undefined) {
+          deptMap[deptId].totalScore += okr.managerScore;
+          deptMap[deptId].scoreCount++;
+        }
+      } else if (okr.status === 'SUBMITTED') {
+        deptMap[deptId].submittedCount++;
+      } else if (okr.status === 'ACCEPTED') {
+        deptMap[deptId].acceptedCount++;
+      } else if (okr.status === 'PENDING' || okr.status === 'NEGOTIATING') {
+        deptMap[deptId].pendingCount++;
+      }
+    }
+
+    const departmentStats = Object.values(deptMap).map(d => ({
+      ...d,
+      avgScore: d.scoreCount > 0 ? Math.round((d.totalScore / d.scoreCount) * 10) / 10 : null,
+      completionRate: d.memberCount > 0 ? Math.round((d.completedCount / d.memberCount) * 100) : 0,
+    }));
+
+    // 8. Bảng xếp hạng cá nhân (chỉ lấy OKR đã SUBMITTED hoặc COMPLETED, max 50)
+    const rankableOkrs = allOkrs
+      .filter(o => o.status === 'SUBMITTED' || o.status === 'COMPLETED')
+      .sort((a, b) => {
+        // Ưu tiên có managerScore
+        if (a.managerScore !== null && b.managerScore === null) return -1;
+        if (a.managerScore === null && b.managerScore !== null) return 1;
+        if (a.managerScore !== null && b.managerScore !== null) return b.managerScore - a.managerScore;
+        return (b.totalScore || 0) - (a.totalScore || 0);
+      })
+      .slice(0, 50);
+
+    const staffRanking = rankableOkrs.map(okr => ({
+      okrId: okr.id,
+      userId: okr.userId,
+      userName: okr.user?.name || 'N/A',
+      userAvatar: okr.user?.avatarUrl || null,
+      deptName: okr.user?.department?.name || 'N/A',
+      deptCode: okr.user?.department?.code || '',
+      jobTitle: (okr.user as any)?.jobTitle || null,
+      objective: okr.objective,
+      totalScore: okr.totalScore || 0,
+      managerScore: okr.managerScore ?? null,
+      status: okr.status,
+    }));
+
+    // 9. Phân bổ xếp loại
+    const ratingDistribution: Record<string, number> = {};
+    for (const ev of allEvaluations) {
+      if (ev.managerRating) {
+        ratingDistribution[ev.managerRating] = (ratingDistribution[ev.managerRating] || 0) + 1;
+      }
+    }
+
+    // 10. Timeline: OKR hoàn thành theo tuần (trong kỳ hiện tại)
+    const timelineData: Array<{ week: string; weekLabel: string; completed: number; submitted: number }> = [];
+    if (currentCycle?.startDate && currentCycle?.endDate) {
+      const start = new Date(currentCycle.startDate);
+      const end = new Date(currentCycle.endDate);
+      const now = new Date();
+      const effectiveEnd = now < end ? now : end;
+
+      // Tạo bucket theo tuần
+      const weekStart = new Date(start);
+      let weekNum = 1;
+      while (weekStart <= effectiveEnd) {
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const completedInWeek = allOkrs.filter(o => {
+          if (o.status !== 'COMPLETED' || !o.updatedAt) return false;
+          const d = new Date(o.updatedAt);
+          return d >= weekStart && d <= weekEnd;
+        }).length;
+
+        const submittedInWeek = allOkrs.filter(o => {
+          if ((o.status !== 'SUBMITTED' && o.status !== 'COMPLETED') || !o.updatedAt) return false;
+          const d = new Date(o.updatedAt);
+          return d >= weekStart && d <= weekEnd;
+        }).length;
+
+        timelineData.push({
+          week: weekStart.toISOString().split('T')[0],
+          weekLabel: `Tuần ${weekNum}`,
+          completed: completedInWeek,
+          submitted: submittedInWeek,
+        });
+
+        weekStart.setDate(weekStart.getDate() + 7);
+        weekNum++;
+      }
+    }
+
+    // 11. Action items
+    const actionItems: Array<{ type: string; count: number; label: string; route: string; severity: string }> = [];
+
+    if (summary.pendingApproval > 0) {
+      actionItems.push({
+        type: 'PENDING_APPROVAL',
+        count: summary.pendingApproval,
+        label: `${summary.pendingApproval} OKR đang chờ duyệt`,
+        route: '/departments/okr?tab=2',
+        severity: 'error',
+      });
+    }
+    if (summary.awaitingReview > 0) {
+      actionItems.push({
+        type: 'AWAITING_REVIEW',
+        count: summary.awaitingReview,
+        label: `${summary.awaitingReview} bài tự khai chờ chấm điểm`,
+        route: '/departments/okr?tab=3',
+        severity: 'warning',
+      });
+    }
+
+    // Phiếu đánh giá chờ xếp loại
+    const pendingEvalCount = allEvaluations.filter(e => e.status === 'SUBMITTED').length;
+    if (pendingEvalCount > 0) {
+      actionItems.push({
+        type: 'PENDING_EVALUATION',
+        count: pendingEvalCount,
+        label: `${pendingEvalCount} phiếu đánh giá chờ xếp loại`,
+        route: '/departments/okr?tab=4',
+        severity: 'warning',
+      });
+    }
+
+    // Người chưa nộp tự khai (kỳ đã qua 50%)
+    if (cycleProgressPercent > 50) {
+      const lateCount = allOkrs.filter(o => o.status === 'ACCEPTED').length;
+      if (lateCount > 0) {
+        actionItems.push({
+          type: 'LATE_SUBMISSION',
+          count: lateCount,
+          label: `${lateCount} người chưa nộp tự khai (đã qua ${Math.round(cycleProgressPercent)}% kỳ)`,
+          route: '/departments/okr?tab=3',
+          severity: 'info',
+        });
+      }
+    }
+
+    return {
+      cycle: currentCycle ? {
+        id: currentCycle.id,
+        name: currentCycle.name,
+        status: currentCycle.status,
+        startDate: currentCycle.startDate,
+        endDate: currentCycle.endDate,
+        progressPercent: Math.round(cycleProgressPercent),
+        daysRemaining,
+      } : null,
+      summary,
+      okrsByStatus,
+      departmentStats,
+      staffRanking,
+      ratingDistribution,
+      timelineData,
+      actionItems,
+    };
+  }
+
 }
