@@ -14,6 +14,8 @@ import {
 import { AuthService } from './auth.service';
 import { AuthExceptionFilter } from './filters/auth-exception.filter';
 import { JwtAuthGuard } from './guards/jwt-auth.guard'; // 👈 QUAN TRỌNG: Nhớ import JwtAuthGuard
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { MicrosoftAuthGuard } from './guards/microsoft-auth.guard';
 import { AllowedDomainsResponseDto } from './dto/allowed-domains-response.dto';
 import { AuthLogoutResponseDto } from './dto/auth-logout-response.dto';
 
@@ -41,7 +43,7 @@ export class AuthController {
 
   // ==================== GOOGLE ====================
   @Get('google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   @ApiOperation({
     summary: 'Bắt đầu đăng nhập Google',
     description:
@@ -152,7 +154,7 @@ export class AuthController {
 
   // ==================== MICROSOFT ====================
   @Get('microsoft')
-  @UseGuards(AuthGuard('microsoft'))
+  @UseGuards(MicrosoftAuthGuard)
   @ApiOperation({
     summary: 'Bắt đầu đăng nhập Microsoft',
     description:
@@ -293,7 +295,15 @@ export class AuthController {
   @ApiInternalServerErrorResponse({
     description: 'Lỗi khi ghi system log (hiếm).',
   })
-  async logout(@Req() req) {
+  async logout(@Req() req, @Res({ passthrough: true }) res) {
+    if (req.session) {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Error destroying session:', err);
+        }
+      });
+    }
+    res.clearCookie('connect.sid');
     return this.authService.logout(req.user);
   }
 
