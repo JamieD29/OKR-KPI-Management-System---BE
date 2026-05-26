@@ -28,6 +28,7 @@ import { UsersService } from './user.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserRolesDto } from './dto/update-user-roles.dto';
 import { AssignManagementPositionDto } from './dto/assign-management-position.dto';
+import { AssignDepartmentDto } from './dto/assign-department.dto';
 import {
   ProfileOptionsResponseDto,
   UserDetailSwaggerDto,
@@ -235,6 +236,35 @@ export class UsersController {
     return this.usersService.assignManagementPosition(
       userId,
       body.positionId ?? null,
+    );
+  }
+
+  @Put(':id/department')
+  @Roles(RoleType.ADMIN)
+  @ApiOperation({
+    summary: 'Gán / gỡ bộ môn của user (chỉ ADMIN)',
+    description:
+      '**departmentId** là UUID hoặc *null* để gỡ khỏi bộ môn. Gửi thông báo cho user khi thay đổi.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'User id' })
+  @ApiBody({ type: AssignDepartmentDto })
+  @ApiOkResponse({
+    description: 'User sau khi cập nhật **department**',
+    type: UserDetailSwaggerDto,
+  })
+  @ApiForbiddenResponse({ description: 'Không có role ADMIN.' })
+  @ApiNotFoundResponse({
+    description:
+      'User không tồn tại, hoặc **departmentId** không khớp bảng **departments**.',
+  })
+  @ApiInternalServerErrorResponse({ description: 'Lỗi DB hoặc tạo notification.' })
+  async assignDepartment(
+    @Param('id') userId: string,
+    @Body() body: AssignDepartmentDto,
+  ) {
+    return this.usersService.assignDepartment(
+      userId,
+      body.departmentId ?? null,
     );
   }
 }

@@ -204,6 +204,42 @@ export class UsersService {
   }
 
   // ======================================================
+  // 7b. ASSIGN DEPARTMENT: Gán / gỡ bộ môn
+  // ======================================================
+  async assignDepartment(userId: string, departmentId: string | null) {
+    const user = await this.findOne(userId);
+
+    if (departmentId) {
+      // Gán bộ môn mới
+      const department = await this.userRepository.manager.getRepository(Department).findOne({ where: { id: departmentId } });
+      if (!department) {
+        throw new NotFoundException(`Bộ môn với ID "${departmentId}" không tồn tại`);
+      }
+      user.department = department;
+
+      // Tạo thông báo cho user
+      await this.notificationService.create(
+        userId,
+        `Bạn đã được gán vào bộ môn: ${department.name}`,
+      );
+    } else {
+      // Gỡ bộ môn
+      if (user.department) {
+        const oldDeptName = user.department.name;
+        user.department = null as any;
+
+        // Thông báo gỡ bộ môn
+        await this.notificationService.create(
+          userId,
+          `Bạn đã được gỡ khỏi bộ môn: ${oldDeptName}`,
+        );
+      }
+    }
+
+    return this.userRepository.save(user);
+  }
+
+  // ======================================================
   // 8. FIND BY ROLE: Lọc users theo chức vụ + chức danh nghề nghiệp
   // ======================================================
   async findByRole(positionId?: string, jobTitle?: string) {
