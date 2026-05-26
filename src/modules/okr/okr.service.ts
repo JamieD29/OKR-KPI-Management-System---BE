@@ -11,6 +11,7 @@ import { UserOkr } from '../../database/entities/performance/user-okr.entity';
 import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
 import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance/evaluation-cycle.entity';
 import { NotificationService } from '../notification/notification.service';
+import { User } from '../../database/entities/user.entity';
 
 @Injectable()
 export class OkrService {
@@ -133,7 +134,10 @@ export class OkrService {
   }
 
   async sendForApproval(id: string, userId: string) {
-    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    const okr = await this.userOkrRepo.findOne({ 
+      where: { id, userId },
+      relations: ['user', 'user.department']
+    });
     if (!okr) throw new NotFoundException('OKR not found');
 
     if (this.isDeadlineExpired(okr)) {
@@ -147,7 +151,33 @@ export class OkrService {
     }
 
     okr.status = 'NEGOTIATING';
-    return this.userOkrRepo.save(okr);
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa
+    try {
+      const managers = await this.userOkrRepo.manager.getRepository(User).find({
+        relations: ['roles', 'managementPosition'],
+      });
+
+      const targetManagers = managers.filter(u => 
+        u.roles.some(r => r.slug === 'ADMIN') || 
+        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+      );
+
+      const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
+      const deptName = okr.user?.department?.name ? ` thuộc bộ môn ${okr.user.department.name}` : '';
+      const message = `🔔 ${senderName}${deptName} đã gửi yêu cầu xét duyệt OKR "${okr.objective}".`;
+
+      for (const manager of targetManagers) {
+        if (manager.id !== userId) {
+          await this.notificationService.create(manager.id, message);
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho quản lý khi duyệt OKR:', err);
+    }
+
+    return saved;
   }
 
   async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
@@ -218,7 +248,10 @@ export class OkrService {
   }
 
   async updateOkrStructure(id: string, userId: string, keyResults: any[], localComments?: Record<string, any[]>) {
-    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    const okr = await this.userOkrRepo.findOne({ 
+      where: { id, userId },
+      relations: ['user', 'user.department']
+    });
     if (!okr) throw new NotFoundException('OKR not found');
     
     if (okr.status !== 'PENDING' && okr.status !== 'NEGOTIATING') {
@@ -250,8 +283,33 @@ export class OkrService {
     okr.proposedChanges = changes;
     okr.status = 'NEGOTIATING';
     
-    await this.userOkrRepo.save(okr);
-    return okr;
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa khi gửi đề xuất điều chỉnh OKR
+    try {
+      const managers = await this.userOkrRepo.manager.getRepository(User).find({
+        relations: ['roles', 'managementPosition'],
+      });
+
+      const targetManagers = managers.filter(u => 
+        u.roles.some(r => r.slug === 'ADMIN') || 
+        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+      );
+
+      const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
+      const deptName = okr.user?.department?.name ? ` thuộc bộ môn ${okr.user.department.name}` : '';
+      const message = `🔔 ${senderName}${deptName} đã gửi đề xuất điều chỉnh OKR "${okr.objective}".`;
+
+      for (const manager of targetManagers) {
+        if (manager.id !== userId) {
+          await this.notificationService.create(manager.id, message);
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho quản lý khi đề xuất OKR:', err);
+    }
+
+    return saved;
   }
 
   async managerUpdateOkrStructure(
@@ -466,7 +524,10 @@ export class OkrService {
   }
 
   async submitSelfReport(id: string, userId: string, selfReportData: any) {
-    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    const okr = await this.userOkrRepo.findOne({ 
+      where: { id, userId },
+      relations: ['user', 'user.department']
+    });
     if (!okr) throw new NotFoundException('OKR not found');
     if (okr.status !== 'ACCEPTED') {
       throw new BadRequestException('OKR chưa được chấp nhận, không thể tự khai.');
@@ -477,8 +538,33 @@ export class OkrService {
 
     okr.totalScore = this.calculateOkrScore(okr.keyResults, selfReportData);
 
-    await this.userOkrRepo.save(okr);
-    return okr;
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho các quản lý/admin khi nộp tự khai điểm!
+    try {
+      const managers = await this.userOkrRepo.manager.getRepository(User).find({
+        relations: ['roles', 'managementPosition'],
+      });
+
+      const targetManagers = managers.filter(u => 
+        u.roles.some(r => r.slug === 'ADMIN') || 
+        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+      );
+
+      const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
+      const deptName = okr.user?.department?.name ? ` thuộc bộ môn ${okr.user.department.name}` : '';
+      const message = `🔔 ${senderName}${deptName} đã nộp tự khai điểm OKR "${okr.objective}" (${okr.totalScore} điểm).`;
+
+      for (const manager of targetManagers) {
+        if (manager.id !== userId) {
+          await this.notificationService.create(manager.id, message);
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho quản lý khi nộp tự khai điểm OKR:', err);
+    }
+
+    return saved;
   }
 
   async draftSelfReport(id: string, userId: string, selfReportData: any) {
@@ -690,15 +776,44 @@ export class OkrService {
     if (body.cycleId) {
       whereClause.cycleId = body.cycleId;
     }
-    const entity = await this.userEvaluationRepo.findOne({ where: whereClause });
+    const entity = await this.userEvaluationRepo.findOne({ 
+      where: whereClause,
+      relations: ['user', 'user.department', 'cycle']
+    });
     if (!entity) throw new NotFoundException('Evaluation Form not found');
 
     entity.selfComment = body.selfComment;
     entity.selfRating = body.selfRating;
     entity.status = 'SUBMITTED';
 
-    await this.userEvaluationRepo.save(entity);
-    return entity;
+    const saved = await this.userEvaluationRepo.save(entity);
+
+    // Gửi thông báo cho các quản lý/admin khi nộp phiếu tự đánh giá!
+    try {
+      const managers = await this.userEvaluationRepo.manager.getRepository(User).find({
+        relations: ['roles', 'managementPosition'],
+      });
+
+      const targetManagers = managers.filter(u => 
+        u.roles.some(r => r.slug === 'ADMIN') || 
+        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+      );
+
+      const senderName = entity.user?.name || entity.user?.email || 'Nhân sự';
+      const deptName = entity.user?.department?.name ? ` thuộc bộ môn ${entity.user.department.name}` : '';
+      const cycleName = entity.cycle?.name ? ` cho ${entity.cycle.name}` : '';
+      const message = `🔔 ${senderName}${deptName} đã nộp phiếu tự đánh giá${cycleName} (${entity.selfRating}).`;
+
+      for (const manager of targetManagers) {
+        if (manager.id !== userId) {
+          await this.notificationService.create(manager.id, message);
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho quản lý khi nộp phiếu tự đánh giá:', err);
+    }
+
+    return saved;
   }
 
   async getSubmittedEvaluations() {
