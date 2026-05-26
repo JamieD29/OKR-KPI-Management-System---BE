@@ -161,7 +161,10 @@ export class OkrService {
 
       const targetManagers = managers.filter(u => 
         u.roles.some(r => r.slug === 'ADMIN') || 
-        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+        (u.managementPosition && (
+          u.managementPosition.permissionLevel !== 'NONE' ||
+          ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+        ))
       );
 
       const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
@@ -207,8 +210,19 @@ export class OkrService {
     // Không tự động đổi status khi gửi comment.
     // Status chỉ thay đổi khi user bấm "Gửi thay đổi & Yêu cầu duyệt" hoặc "Gửi yêu cầu duyệt đề xuất".
 
-    await this.userOkrRepo.save(okr);
-    return okr;
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Nếu manager gửi phản hồi đàm phán (chat comment), gửi thông báo cho user
+    if (sender === 'MANAGER') {
+      try {
+        const messageStr = `💬 Người giao OKR đã phản hồi yêu cầu đề xuất điều chỉnh OKR "${okr.objective}" của bạn.`;
+        await this.notificationService.create(okr.userId, messageStr);
+      } catch (err) {
+        console.error('Lỗi gửi thông báo comment từ manager:', err);
+      }
+    }
+
+    return saved;
   }
 
   async updateItemProperties(id: string, itemId: string, updates: any) {
@@ -293,7 +307,10 @@ export class OkrService {
 
       const targetManagers = managers.filter(u => 
         u.roles.some(r => r.slug === 'ADMIN') || 
-        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+        (u.managementPosition && (
+          u.managementPosition.permissionLevel !== 'NONE' ||
+          ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+        ))
       );
 
       const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
@@ -345,8 +362,17 @@ export class OkrService {
     okr.proposedChanges = changes;
     okr.status = 'PENDING'; // Manager đã phản hồi, chờ user xác nhận
 
-    await this.userOkrRepo.save(okr);
-    return okr;
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho nhân sự là người giao OKR đã phản hồi đề xuất
+    try {
+      const message = `💬 Người giao OKR đã phản hồi yêu cầu đề xuất điều chỉnh OKR "${okr.objective}" của bạn.`;
+      await this.notificationService.create(okr.userId, message);
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho user khi manager phản hồi OKR:', err);
+    }
+
+    return saved;
   }
 
   // --- GIA HẠN DEADLINE (Dành cho Trưởng khoa) ---
@@ -548,7 +574,10 @@ export class OkrService {
 
       const targetManagers = managers.filter(u => 
         u.roles.some(r => r.slug === 'ADMIN') || 
-        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+        (u.managementPosition && (
+          u.managementPosition.permissionLevel !== 'NONE' ||
+          ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+        ))
       );
 
       const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
@@ -796,7 +825,10 @@ export class OkrService {
 
       const targetManagers = managers.filter(u => 
         u.roles.some(r => r.slug === 'ADMIN') || 
-        (u.managementPosition && (u.managementPosition.slug === 'DEAN' || u.managementPosition.slug === 'VICE_DEAN'))
+        (u.managementPosition && (
+          u.managementPosition.permissionLevel !== 'NONE' ||
+          ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+        ))
       );
 
       const senderName = entity.user?.name || entity.user?.email || 'Nhân sự';
