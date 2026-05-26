@@ -184,7 +184,10 @@ export class OkrService {
   }
 
   async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
-    const okr = await this.userOkrRepo.findOne({ where: { id } });
+    const okr = await this.userOkrRepo.findOne({ 
+      where: { id },
+      relations: ['user', 'user.department']
+    });
     if (!okr) throw new NotFoundException('OKR not found');
 
     // Chặn đàm phán nếu đã quá deadline (chỉ chặn user, manager vẫn có thể)
@@ -219,6 +222,35 @@ export class OkrService {
         await this.notificationService.create(okr.userId, messageStr);
       } catch (err) {
         console.error('Lỗi gửi thông báo comment từ manager:', err);
+      }
+    }
+
+    // Nếu user gửi phản hồi đàm phán (chat comment), gửi thông báo cho manager
+    if (sender === 'USER') {
+      try {
+        const managers = await this.userOkrRepo.manager.getRepository(User).find({
+          relations: ['roles', 'managementPosition'],
+        });
+
+        const targetManagers = managers.filter(u => 
+          u.roles.some(r => r.slug === 'ADMIN') || 
+          (u.managementPosition && (
+            u.managementPosition.permissionLevel !== 'NONE' ||
+            ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+          ))
+        );
+
+        const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
+        const deptName = okr.user?.department?.name ? ` thuộc bộ môn ${okr.user.department.name}` : '';
+        const messageStr = `💬 ${senderName}${deptName} đã phản hồi đề xuất điều chỉnh OKR "${okr.objective}".`;
+
+        for (const manager of targetManagers) {
+          if (manager.id !== okr.userId) {
+            await this.notificationService.create(manager.id, messageStr);
+          }
+        }
+      } catch (err) {
+        console.error('Lỗi gửi thông báo comment từ user:', err);
       }
     }
 
