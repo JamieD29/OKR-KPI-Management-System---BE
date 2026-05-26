@@ -123,4 +123,27 @@ export class AdminController {
     await this.seederService.factoryReset();
     return { message: 'Hệ thống đã được khôi phục về cài đặt gốc thành công!' };
   }
+
+  @Get('dashboard')
+  @ApiOperation({
+    summary: 'Thống kê tổng hợp cho Admin Dashboard',
+    description:
+      'Trả về số liệu người dùng: tổng users, users active 30 ngày, users chưa setup profile.',
+  })
+  @ApiOkResponse({ description: 'Thống kê admin dashboard' })
+  @ApiInternalServerErrorResponse({ description: 'Lỗi DB khi thống kê.' })
+  async getDashboardStats() {
+    return this.adminService.getDashboardStats();
+  }
+
+  @Get('system-health')
+  @ApiOperation({
+    summary: 'Sức khỏe hệ thống: CPU, RAM, Uptime',
+    description:
+      'Trả về thông tin CPU load, RAM usage, uptime server và thông tin Node.js process. Dữ liệu lấy từ Node.js os module — dùng cho Admin Dashboard System Health panel.',
+  })
+  @ApiOkResponse({ description: 'Thông tin system health theo thời gian thực' })
+  async getSystemHealth() {
+    return this.adminService.getSystemHealth();
+  }
 }
