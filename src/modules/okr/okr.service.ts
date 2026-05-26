@@ -126,11 +126,45 @@ export class OkrService {
   }
 
   async acceptOkr(id: string, userId: string) {
-    const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
+    const okr = await this.userOkrRepo.findOne({ 
+      where: { id, userId },
+      relations: ['user', 'user.department']
+    });
     if (!okr) throw new NotFoundException('OKR not found');
-    okr.status = 'ACCEPTED';
-    okr.acceptedAt = new Date();
-    return this.userOkrRepo.save(okr);
+    
+    // Đổi trạng thái thành NEGOTIATING để chờ quản lý duyệt chốt OKR
+    okr.status = 'NEGOTIATING';
+    
+    const saved = await this.userOkrRepo.save(okr);
+
+    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa/Trưởng bộ môn
+    try {
+      const managers = await this.userOkrRepo.manager.getRepository(User).find({
+        relations: ['roles', 'managementPosition'],
+      });
+
+      const targetManagers = managers.filter(u => 
+        u.roles.some(r => r.slug === 'ADMIN') || 
+        (u.managementPosition && (
+          u.managementPosition.permissionLevel !== 'NONE' ||
+          ['TRUONG_KHOA', 'PHO_TRUONG_KHOA', 'TRUONG_BO_MON', 'PHO_TRUONG_BO_MON'].includes(u.managementPosition.slug)
+        ))
+      );
+
+      const senderName = okr.user?.name || okr.user?.email || 'Nhân sự';
+      const deptName = okr.user?.department?.name ? ` thuộc bộ môn ${okr.user.department.name}` : '';
+      const message = `🔔 ${senderName}${deptName} đã đồng ý chấp nhận OKR "${okr.objective}". Vui lòng phê duyệt để hoàn thành đàm phán.`;
+
+      for (const manager of targetManagers) {
+        if (manager.id !== userId) {
+          await this.notificationService.create(manager.id, message);
+        }
+      }
+    } catch (err) {
+      console.error('Lỗi gửi thông báo cho quản lý khi user đồng ý chấp nhận OKR:', err);
+    }
+
+    return saved;
   }
 
   async sendForApproval(id: string, userId: string) {
