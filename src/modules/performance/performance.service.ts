@@ -55,6 +55,7 @@ export class PerformanceService {
       startDate,
       endDate,
       status: EvaluationStatus.CLOSED,
+      bypassValidation: !!bypassValidation,
     });
     return this.cycleRepo.save(newCycle);
   }

@@ -42,6 +42,9 @@ export class EvaluationCycle {
   @Column({ name: 'is_del', default: false })
   isDel: boolean;
 
+  @Column({ name: 'bypass_validation', default: false })
+  bypassValidation: boolean;
+
   @CreateDateColumn()
   createdAt: Date;
 
