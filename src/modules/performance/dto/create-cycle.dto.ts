@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsBoolean } from 'class-validator';
 import { CycleType } from '../../../database/entities/performance/evaluation-cycle.entity';
 
 export class CreateCycleDto {
@@ -32,4 +32,12 @@ export class CreateCycleDto {
   })
   @IsDateString()
   endDate: string;
+
+  @ApiPropertyOptional({
+    description: 'Bypass validation ngày bắt đầu quá khứ (dành cho kiểm thử/dev)',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  bypassValidation?: boolean;
 }

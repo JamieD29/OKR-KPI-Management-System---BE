@@ -61,6 +61,7 @@ export class PerformanceController {
       body.type ?? '',
       new Date(body.startDate),
       new Date(body.endDate),
+      body.bypassValidation,
     );
   }
 

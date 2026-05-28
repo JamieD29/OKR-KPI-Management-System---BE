@@ -24,17 +24,20 @@ export class PerformanceService {
   }
 
   // Tạo kỳ đánh giá mới
-  async createCycle(name: string, type: string, startDate: Date, endDate: Date) {
-    // Validation: Không cho phép tạo kỳ với ngày bắt đầu ở quá khứ
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  async createCycle(name: string, type: string, startDate: Date, endDate: Date, bypassValidation?: boolean) {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
 
-    if (start < today) {
-      throw new BadRequestException(
-        'Không thể tạo kỳ đánh giá với ngày bắt đầu ở quá khứ. Vui lòng chọn ngày bắt đầu từ hôm nay trở đi.',
-      );
+    // Validation: Không cho phép tạo kỳ với ngày bắt đầu ở quá khứ (trừ khi có bypassValidation để test)
+    if (!bypassValidation) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (start < today) {
+        throw new BadRequestException(
+          'Không thể tạo kỳ đánh giá với ngày bắt đầu ở quá khứ. Vui lòng chọn ngày bắt đầu từ hôm nay trở đi.',
+        );
+      }
     }
 
     // Validation: endDate phải sau startDate
