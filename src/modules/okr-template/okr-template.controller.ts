@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Put, Delete, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Put, Delete, Query, UseGuards, Request } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -9,6 +9,8 @@ import {
   ApiBadRequestResponse,
   ApiNotFoundResponse,
   ApiInternalServerErrorResponse,
+  ApiBearerAuth,
+  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { OkrTemplateService } from './okr-template.service';
 import {
@@ -22,8 +24,14 @@ import {
   RemoveOkrTemplateResponseDto,
   ApplyTemplateResponseDto,
 } from './dto/okr-template-response.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('okr-templates')
+@ApiBearerAuth()
+@ApiUnauthorizedResponse({
+  description: 'Thiếu hoặc sai token JWT.',
+})
+@UseGuards(JwtAuthGuard)
 @Controller('okr-templates')
 export class OkrTemplateController {
   constructor(private readonly okrTemplateService: OkrTemplateService) {}
@@ -32,21 +40,35 @@ export class OkrTemplateController {
   @ApiOperation({
     summary: 'Danh sách template OKR',
     description:
-      'Không có guard. Tham số **departmentId** tùy chọn: lọc theo bộ môn; bỏ qua → toàn bộ, sort **createdAt** giảm dần.',
+      'Yêu cầu JWT. Phân quyền: ADMIN thấy tất cả, các chức vụ quản lý khác chỉ thấy template họ tự tạo.',
   })
   @ApiQuery({
     name: 'departmentId',
     required: false,
     format: 'uuid',
-    description: 'Lọc theo cột **department_id** của bảng template.',
+    description: 'Lọc theo cột **department_id** của bảng template (Chỉ áp dụng với ADMIN).',
   })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto, isArray: true })
   @ApiInternalServerErrorResponse()
-  findAll(@Query('departmentId') departmentId?: string) {
-    if (departmentId) {
-      return this.okrTemplateService.findByDepartment(departmentId);
+  findAll(@Request() req: any, @Query('departmentId') departmentId?: string) {
+    console.log('[DEBUG okr-templates GET] req.user:', req.user);
+    const userId = req.user?.id || req.user?.sub;
+    const userRoles = req.user?.roles || [];
+
+    const isAdmin = userRoles.some((role: any) => {
+      const roleSlug = typeof role === 'string' ? role : role.slug;
+      return roleSlug === 'ADMIN';
+    });
+
+    if (isAdmin) {
+      if (departmentId) {
+        return this.okrTemplateService.findByDepartment(departmentId);
+      }
+      return this.okrTemplateService.findAll();
+    } else {
+      // Các chức vụ quản lý khác -> Chỉ trả về template do chính họ tạo ra
+      return this.okrTemplateService.findByCreator(userId);
     }
-    return this.okrTemplateService.findAll();
   }
 
   @Get('job-titles')
@@ -75,7 +97,7 @@ export class OkrTemplateController {
   @ApiOperation({
     summary: 'Tạo template',
     description:
-      '**Công khai** trong code hiện tại — nên bảo vệ ở production. Nếu **structure** không rỗng: tổng **maxScore** ở cấp gốc phải = 100.',
+      'Yêu cầu JWT. Tự động gắn createdByUserId và createdByName từ user đăng nhập.',
   })
   @ApiBody({ type: CreateOkrTemplateDto })
   @ApiOkResponse({ type: OkrTemplateSwaggerDto })
@@ -83,8 +105,10 @@ export class OkrTemplateController {
     description: 'Validation DTO hoặc tổng **maxScore** khác 100.',
   })
   @ApiInternalServerErrorResponse()
-  create(@Body() createDto: CreateOkrTemplateDto) {
-    return this.okrTemplateService.create(createDto);
+  create(@Body() createDto: CreateOkrTemplateDto, @Request() req: any) {
+    console.log('[DEBUG okr-templates POST] req.user:', req.user);
+    const userId = req.user?.id || req.user?.sub;
+    return this.okrTemplateService.create(createDto, userId);
   }
 
   @Put(':id')

@@ -28,8 +28,12 @@ export class PerformanceService {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
 
+    // Bảo mật: Không cho phép bypass validation trên môi trường production
+    const isProduction = process.env.NODE_ENV === 'production';
+    const activeBypass = bypassValidation && !isProduction;
+
     // Validation: Không cho phép tạo kỳ với ngày bắt đầu ở quá khứ (trừ khi có bypassValidation để test)
-    if (!bypassValidation) {
+    if (!activeBypass) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 

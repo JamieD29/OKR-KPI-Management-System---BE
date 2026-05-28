@@ -40,6 +40,13 @@ export class OkrTemplateService {
     });
   }
 
+  async findByCreator(userId: string) {
+    return this.okrTemplateRepository.find({
+      where: { createdByUserId: userId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async findOne(id: string) {
     const template = await this.okrTemplateRepository.findOne({ where: { id } });
     if (!template) {
@@ -81,10 +88,23 @@ export class OkrTemplateService {
     }
   }
 
-  async create(createDto: any) {
+  async create(createDto: any, userId?: string) {
     this.validateTemplateStructure(createDto.structure);
+    
+    console.log('[DEBUG OkrTemplateService.create] Received userId:', userId);
+    if (userId) {
+      const user = await this.userRepository.findOne({ where: { id: userId } });
+      console.log('[DEBUG OkrTemplateService.create] Found User in DB:', user);
+      if (user) {
+        createDto.createdByUserId = user.id;
+        createDto.createdByName = user.name || user.email;
+      }
+    }
+
     const template = this.okrTemplateRepository.create(createDto);
-    return this.okrTemplateRepository.save(template);
+    const saved = await this.okrTemplateRepository.save(template);
+    console.log('[DEBUG OkrTemplateService.create] Saved Template:', saved);
+    return saved;
   }
 
   async update(id: string, updateDto: any) {
