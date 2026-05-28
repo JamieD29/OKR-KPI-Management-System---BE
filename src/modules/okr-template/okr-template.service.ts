@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OkrTemplate } from '../../database/entities/performance/okr-template.entity';
@@ -98,6 +98,9 @@ export class OkrTemplateService {
       if (user) {
         createDto.createdByUserId = user.id;
         createDto.createdByName = user.name || user.email;
+        if (!createDto.departmentId && user.department?.id) {
+          createDto.departmentId = user.department.id;
+        }
       }
     }
 
@@ -107,17 +110,23 @@ export class OkrTemplateService {
     return saved;
   }
 
-  async update(id: string, updateDto: any) {
+  async update(id: string, updateDto: any, userId?: string, isAdmin?: boolean) {
     if (updateDto.structure) {
       this.validateTemplateStructure(updateDto.structure);
     }
     const template = await this.findOne(id);
+    if (!isAdmin && userId && template.createdByUserId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền chỉnh sửa template này.');
+    }
     const updated = Object.assign(template, updateDto);
     return this.okrTemplateRepository.save(updated);
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId?: string, isAdmin?: boolean) {
     const template = await this.findOne(id);
+    if (!isAdmin && userId && template.createdByUserId !== userId) {
+      throw new ForbiddenException('Bạn không có quyền xóa template này.');
+    }
     await this.okrTemplateRepository.remove(template);
     return { success: true };
   }

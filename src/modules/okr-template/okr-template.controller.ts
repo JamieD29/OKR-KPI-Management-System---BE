@@ -122,8 +122,14 @@ export class OkrTemplateController {
   @ApiBadRequestResponse({ description: 'Tổng **maxScore** không hợp lệ.' })
   @ApiNotFoundResponse({ description: 'Template không tồn tại.' })
   @ApiInternalServerErrorResponse()
-  update(@Param('id') id: string, @Body() updateDto: UpdateOkrTemplateDto) {
-    return this.okrTemplateService.update(id, updateDto);
+  update(@Param('id') id: string, @Body() updateDto: UpdateOkrTemplateDto, @Request() req: any) {
+    const userId = req.user?.id || req.user?.sub;
+    const userRoles = req.user?.roles || [];
+    const isAdmin = userRoles.some((role: any) => {
+      const roleSlug = typeof role === 'string' ? role : role.slug;
+      return roleSlug === 'ADMIN';
+    });
+    return this.okrTemplateService.update(id, updateDto, userId, isAdmin);
   }
 
   @Delete(':id')
@@ -132,8 +138,14 @@ export class OkrTemplateController {
   @ApiOkResponse({ type: RemoveOkrTemplateResponseDto })
   @ApiNotFoundResponse({ description: 'Template không tồn tại.' })
   @ApiInternalServerErrorResponse()
-  remove(@Param('id') id: string) {
-    return this.okrTemplateService.remove(id);
+  remove(@Param('id') id: string, @Request() req: any) {
+    const userId = req.user?.id || req.user?.sub;
+    const userRoles = req.user?.roles || [];
+    const isAdmin = userRoles.some((role: any) => {
+      const roleSlug = typeof role === 'string' ? role : role.slug;
+      return roleSlug === 'ADMIN';
+    });
+    return this.okrTemplateService.remove(id, userId, isAdmin);
   }
 
   @Post(':id/apply')
