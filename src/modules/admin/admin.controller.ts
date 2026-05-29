@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Param, Sse, MessageEvent } from '@nestjs/common';
+import { Observable, interval, from, of } from 'rxjs';
+import { map, switchMap, catchError } from 'rxjs/operators';
 import {
   ApiTags,
   ApiOperation,
@@ -21,6 +23,7 @@ import {
   AdminCreateDomainResponseDto,
 } from './dto/admin-domains-response.dto';
 import { AdminMessageResponseDto } from './dto/admin-message-response.dto';
+import { SystemLogsService } from '../system-logs/system-logs.service';
 
 @ApiTags('admin')
 @ApiBearerAuth()
@@ -36,6 +39,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly seederService: DatabaseSeederService,
+    private readonly systemLogsService: SystemLogsService,
   ) {}
 
   @Get('domains')
@@ -145,5 +149,45 @@ export class AdminController {
   @ApiOkResponse({ description: 'Thông tin system health theo thời gian thực' })
   async getSystemHealth() {
     return this.adminService.getSystemHealth();
+  }
+
+  @Sse('system-health/stream')
+  @ApiOperation({
+    summary: 'Sức khỏe hệ thống: Stream real-time (SSE)',
+    description:
+      'Stream real-time thông tin CPU load, RAM usage, uptime server và thông tin Node.js process bằng Server-Sent Events (SSE). Cập nhật mỗi 2 giây.',
+  })
+  sseSystemHealth(): Observable<MessageEvent> {
+    return interval(2000).pipe(
+      switchMap(() =>
+        from(this.adminService.getSystemHealth()).pipe(
+          catchError((err) => {
+            console.error('Error fetching system health for SSE:', err);
+            return of(null);
+          }),
+        ),
+      ),
+      map((health) => ({ data: health } as MessageEvent)),
+    );
+  }
+
+  @Sse('system-logs/stream')
+  @ApiOperation({
+    summary: 'Stream nhật ký hệ thống real-time (SSE)',
+    description:
+      'Stream real-time danh sách nhật ký hệ thống bằng Server-Sent Events (SSE). Cập nhật mỗi 2 giây.',
+  })
+  sseSystemLogs(): Observable<MessageEvent> {
+    return interval(2000).pipe(
+      switchMap(() =>
+        from(this.systemLogsService.findAll()).pipe(
+          catchError((err) => {
+            console.error('Error fetching system logs for SSE:', err);
+            return of([]);
+          }),
+        ),
+      ),
+      map((logs) => ({ data: logs } as MessageEvent)),
+    );
   }
 }
