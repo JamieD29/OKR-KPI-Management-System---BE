@@ -12,6 +12,9 @@ import { User } from '../../database/entities/user.entity';
 import { Role } from '../../database/entities/role.entity';
 import { Department } from '../../database/entities/department.entity';
 import { ManagementPosition } from '../../database/entities/management-position.entity';
+import { UserOkr } from '../../database/entities/performance/user-okr.entity';
+import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
+import { EvaluationCycle } from '../../database/entities/performance/evaluation-cycle.entity';
 
 // 👇 Import Notification Service
 import { NotificationService } from '../notification/notification.service';
@@ -31,6 +34,15 @@ export class UsersService {
 
     @InjectRepository(ManagementPosition)
     private positionRepository: Repository<ManagementPosition>,
+
+    @InjectRepository(UserOkr)
+    private userOkrRepo: Repository<UserOkr>,
+
+    @InjectRepository(UserEvaluation)
+    private userEvalRepo: Repository<UserEvaluation>,
+
+    @InjectRepository(EvaluationCycle)
+    private cycleRepository: Repository<EvaluationCycle>,
 
     private notificationService: NotificationService,
   ) {}
@@ -265,5 +277,46 @@ export class UsersService {
   async remove(id: string) {
     const user = await this.findOne(id);
     return this.userRepository.remove(user);
+  }
+
+  // ======================================================
+  // 10. GET USER DETAIL: Lấy chi tiết user (Profile, OKR, Đánh giá) theo kỳ
+  // ======================================================
+  async getUserDetail(userId: string, cycleId?: string) {
+    // Lấy profile user (findOne đã include roles, department, managementPosition)
+    const user = await this.findOne(userId);
+
+    // Lấy tất cả các kỳ đánh giá để FE hiện dropdown
+    const allCycles = await this.cycleRepository.find({
+      where: { isDel: false },
+      order: { createdAt: 'DESC' },
+    });
+
+    // Xác định kỳ cần truy vấn (mặc định là kỳ mới nhất)
+    let targetCycleId = cycleId;
+    if (!targetCycleId && allCycles.length > 0) {
+      targetCycleId = allCycles[0].id;
+    }
+
+    let okrs: UserOkr[] = [];
+    let evaluation: UserEvaluation | null = null;
+
+    if (targetCycleId) {
+      okrs = await this.userOkrRepo.find({
+        where: { userId, cycleId: targetCycleId },
+        order: { createdAt: 'DESC' },
+      });
+
+      evaluation = await this.userEvalRepo.findOne({
+        where: { userId, cycleId: targetCycleId },
+      });
+    }
+
+    return {
+      user,
+      okrs,
+      evaluation,
+      allCycles,
+    };
   }
 }

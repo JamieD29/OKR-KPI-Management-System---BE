@@ -267,4 +267,18 @@ export class UsersController {
       body.departmentId ?? null,
     );
   }
+
+  @Get(':id/detail')
+  @ApiOperation({
+    summary: 'Lấy toàn bộ thông tin chi tiết nhân sự (Profile, OKRs, Đánh giá) theo kỳ',
+    description: 'Dành cho Quản lý / Admin xem hồ sơ chi tiết của nhân viên.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'User id' })
+  @ApiQuery({ name: 'cycleId', required: false, description: 'ID của kỳ đánh giá (mặc định lấy kỳ mới nhất)' })
+  @ApiOkResponse({ description: 'Thông tin chi tiết nhân sự' })
+  @ApiNotFoundResponse({ description: 'User không tồn tại.' })
+  @ApiInternalServerErrorResponse()
+  async getUserDetail(@Param('id') userId: string, @Query('cycleId') cycleId?: string) {
+    return this.usersService.getUserDetail(userId, cycleId);
+  }
 }
