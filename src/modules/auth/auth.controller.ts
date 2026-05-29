@@ -316,10 +316,13 @@ export class AuthController {
   })
   async bypassLogin(@Body() body: any) {
     // Bảo mật: Không chạy trên Production trừ khi cấu hình rõ ràng
-    if (
-      process.env.NODE_ENV === 'production' &&
-      process.env.ALLOW_BYPASS_IN_PROD !== 'true'
-    ) {
+    const isProduction =
+      process.env.NODE_ENV === 'production' ||
+      (process.env.FRONTEND_URL &&
+        (process.env.FRONTEND_URL.includes('fit.hcmus.edu.vn') ||
+          !process.env.FRONTEND_URL.includes('localhost')));
+
+    if (isProduction && process.env.ALLOW_BYPASS_IN_PROD !== 'true') {
       throw new ForbiddenException('Bypass login is disabled in production.');
     }
 
