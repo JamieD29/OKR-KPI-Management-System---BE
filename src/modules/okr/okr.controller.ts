@@ -45,12 +45,12 @@ export class OkrController {
   @ApiOperation({
     summary: 'Dashboard tổng hợp cho Trưởng khoa',
     description:
-      'Trả về dữ liệu tổng hợp gồm: summary counts, thống kê bộ môn, xếp hạng cá nhân, phân bổ xếp loại, timeline OKR, và action items.',
+      'Trả về dữ liệu tổng hợp gồm: summary counts, thống kê bộ môn, xếp hạng cá nhân, phân bổ xếp loại, timeline OKR, và action items. Hỗ trợ lọc theo kỳ qua query param ?cycleId=...',
   })
   @ApiOkResponse({ description: 'Dữ liệu dashboard tổng hợp' })
   @ApiInternalServerErrorResponse()
-  async getDeanDashboard() {
-    return this.okrService.getDeanDashboard();
+  async getDeanDashboard(@Query('cycleId') cycleId?: string) {
+    return this.okrService.getDeanDashboard(cycleId);
   }
 
   @Post('department')

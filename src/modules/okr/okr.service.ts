@@ -970,41 +970,56 @@ export class OkrService {
   // --- DEAN DASHBOARD: API TỔNG HỢP ---
   // ==========================================
 
-  async getDeanDashboard() {
-    // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
-    const cycles = await this.userEvaluationRepo.manager
+  async getDeanDashboard(cycleId?: string) {
+    // 1. Lấy tất cả kỳ đánh giá (để FE render dropdown)
+    const allCyclesList = await this.userEvaluationRepo.manager
       .getRepository(EvaluationCycle)
       .find({ where: { isDel: false }, order: { createdAt: 'DESC' } });
 
-    const openCycle = cycles.find(c => c.status === EvaluationStatus.OPEN);
-    const currentCycle = openCycle || cycles[0] || null;
+    // Xác định kỳ hiện tại đang xem
+    let currentCycle: EvaluationCycle | null = null;
+    if (cycleId) {
+      currentCycle = allCyclesList.find(c => c.id === cycleId) || null;
+    } else {
+      // Mặc định: kỳ OPEN, nếu không có thì kỳ mới nhất
+      const openCycle = allCyclesList.find(c => c.status === EvaluationStatus.OPEN);
+      currentCycle = openCycle || allCyclesList[0] || null;
+    }
+
+    // Kiểm tra kỳ tương lai (startDate > now)
+    const now = new Date();
+    const isFutureCycle = currentCycle?.startDate
+      ? new Date(currentCycle.startDate) > now
+      : false;
 
     // Tính tiến độ kỳ
     let cycleProgressPercent = 0;
-    if (currentCycle?.startDate && currentCycle?.endDate) {
-      const now = new Date().getTime();
+    if (!isFutureCycle && currentCycle?.startDate && currentCycle?.endDate) {
       const start = new Date(currentCycle.startDate).getTime();
       const end = new Date(currentCycle.endDate).getTime();
       if (end > start) {
-        cycleProgressPercent = Math.max(0, Math.min(100, ((now - start) / (end - start)) * 100));
+        cycleProgressPercent = Math.max(0, Math.min(100, ((now.getTime() - start) / (end - start)) * 100));
       }
     }
 
     // Tính số ngày còn lại
     let daysRemaining: number | null = null;
     if (currentCycle?.endDate) {
-      const diff = new Date(currentCycle.endDate).getTime() - new Date().getTime();
+      const diff = new Date(currentCycle.endDate).getTime() - now.getTime();
       daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // 2. Lấy TẤT CẢ OKR (kèm user, department)
-    const allOkrs = await this.userOkrRepo.find({
+    // 2. Lấy OKR — lọc theo cycleId nếu có
+    const okrWhere: any = currentCycle ? { cycleId: currentCycle.id } : {};
+    const allOkrs = isFutureCycle ? [] : await this.userOkrRepo.find({
+      where: currentCycle ? { cycleId: currentCycle.id } : undefined,
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
-    // 3. Lấy tất cả phiếu đánh giá
-    const allEvaluations = await this.userEvaluationRepo.find({
+    // 3. Lấy phiếu đánh giá — lọc theo cycleId nếu có
+    const allEvaluations = isFutureCycle ? [] : await this.userEvaluationRepo.find({
+      where: currentCycle ? { cycleId: currentCycle.id } : undefined,
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
@@ -1033,7 +1048,7 @@ export class OkrService {
       awaitingReview: statusCounts.SUBMITTED,
       completed: statusCounts.COMPLETED,
       accepted: statusCounts.ACCEPTED,
-      notStarted: totalStaff - allOkrs.length, // Người chưa được giao OKR
+      notStarted: totalStaff - allOkrs.length,
     };
 
     // 6. OKR theo trạng thái
@@ -1064,7 +1079,7 @@ export class OkrService {
     for (const okr of allOkrs) {
       const deptId = okr.user?.department?.id;
       if (!deptId || !deptMap[deptId]) continue;
-      
+
       if (okr.status === 'COMPLETED') {
         deptMap[deptId].completedCount++;
         if (okr.managerScore !== null && okr.managerScore !== undefined) {
@@ -1086,11 +1101,10 @@ export class OkrService {
       completionRate: d.memberCount > 0 ? Math.round((d.completedCount / d.memberCount) * 100) : 0,
     }));
 
-    // 8. Bảng xếp hạng cá nhân (chỉ lấy OKR đã SUBMITTED hoặc COMPLETED, max 50)
+    // 8. Bảng xếp hạng cá nhân (chỉ SUBMITTED hoặc COMPLETED, max 50)
     const rankableOkrs = allOkrs
       .filter(o => o.status === 'SUBMITTED' || o.status === 'COMPLETED')
       .sort((a, b) => {
-        // Ưu tiên có managerScore
         if (a.managerScore !== null && b.managerScore === null) return -1;
         if (a.managerScore === null && b.managerScore !== null) return 1;
         if (a.managerScore !== null && b.managerScore !== null) return b.managerScore - a.managerScore;
@@ -1112,23 +1126,40 @@ export class OkrService {
       status: okr.status,
     }));
 
-    // 9. Phân bổ xếp loại
+    // 9. Phân bổ xếp loại + chi tiết danh sách người theo từng xếp loại
     const ratingDistribution: Record<string, number> = {};
+    const ratingDetails: Record<string, Array<{
+      userId: string;
+      userName: string;
+      userAvatar: string | null;
+      deptName: string;
+      selfScore: number | null;
+      managerScore: number | null;
+    }>> = {};
+
     for (const ev of allEvaluations) {
       if (ev.managerRating) {
-        ratingDistribution[ev.managerRating] = (ratingDistribution[ev.managerRating] || 0) + 1;
+        const rating = ev.managerRating;
+        ratingDistribution[rating] = (ratingDistribution[rating] || 0) + 1;
+        if (!ratingDetails[rating]) ratingDetails[rating] = [];
+        ratingDetails[rating].push({
+          userId: ev.userId,
+          userName: ev.user?.name || 'N/A',
+          userAvatar: (ev.user as any)?.avatarUrl || null,
+          deptName: ev.user?.department?.name || 'N/A',
+          selfScore: ev.selfScoreTotal ?? null,
+          managerScore: ev.principalScoreTotal ?? null,
+        });
       }
     }
 
-    // 10. Timeline: OKR hoàn thành theo tuần (trong kỳ hiện tại)
+    // 10. Timeline: OKR hoàn thành theo tuần
     const timelineData: Array<{ week: string; weekLabel: string; completed: number; submitted: number }> = [];
-    if (currentCycle?.startDate && currentCycle?.endDate) {
+    if (!isFutureCycle && currentCycle?.startDate && currentCycle?.endDate) {
       const start = new Date(currentCycle.startDate);
       const end = new Date(currentCycle.endDate);
-      const now = new Date();
       const effectiveEnd = now < end ? now : end;
 
-      // Tạo bucket theo tuần
       const weekStart = new Date(start);
       let weekNum = 1;
       while (weekStart <= effectiveEnd) {
@@ -1159,51 +1190,49 @@ export class OkrService {
       }
     }
 
-    // 11. Action items
+    // 11. Action items (chỉ có ý nghĩa với kỳ đang OPEN)
     const actionItems: Array<{ type: string; count: number; label: string; route: string; severity: string }> = [];
 
-    if (summary.pendingApproval > 0) {
-      actionItems.push({
-        type: 'PENDING_APPROVAL',
-        count: summary.pendingApproval,
-        label: `${summary.pendingApproval} OKR đang chờ duyệt`,
-        route: '/departments/okr?tab=2',
-        severity: 'error',
-      });
-    }
-    if (summary.awaitingReview > 0) {
-      actionItems.push({
-        type: 'AWAITING_REVIEW',
-        count: summary.awaitingReview,
-        label: `${summary.awaitingReview} bài tự khai chờ chấm điểm`,
-        route: '/departments/okr?tab=3',
-        severity: 'warning',
-      });
-    }
-
-    // Phiếu đánh giá chờ xếp loại
-    const pendingEvalCount = allEvaluations.filter(e => e.status === 'SUBMITTED').length;
-    if (pendingEvalCount > 0) {
-      actionItems.push({
-        type: 'PENDING_EVALUATION',
-        count: pendingEvalCount,
-        label: `${pendingEvalCount} phiếu đánh giá chờ xếp loại`,
-        route: '/departments/okr?tab=4',
-        severity: 'warning',
-      });
-    }
-
-    // Người chưa nộp tự khai (kỳ đã qua 50%)
-    if (cycleProgressPercent > 50) {
-      const lateCount = allOkrs.filter(o => o.status === 'ACCEPTED').length;
-      if (lateCount > 0) {
+    if (!isFutureCycle) {
+      if (summary.pendingApproval > 0) {
         actionItems.push({
-          type: 'LATE_SUBMISSION',
-          count: lateCount,
-          label: `${lateCount} người chưa nộp tự khai (đã qua ${Math.round(cycleProgressPercent)}% kỳ)`,
-          route: '/departments/okr?tab=3',
-          severity: 'info',
+          type: 'PENDING_APPROVAL',
+          count: summary.pendingApproval,
+          label: `${summary.pendingApproval} OKR đang chờ duyệt`,
+          route: '/departments/okr?tab=2',
+          severity: 'error',
         });
+      }
+      if (summary.awaitingReview > 0) {
+        actionItems.push({
+          type: 'AWAITING_REVIEW',
+          count: summary.awaitingReview,
+          label: `${summary.awaitingReview} bài tự khai chờ chấm điểm`,
+          route: '/departments/okr?tab=3',
+          severity: 'warning',
+        });
+      }
+      const pendingEvalCount = allEvaluations.filter(e => e.status === 'SUBMITTED').length;
+      if (pendingEvalCount > 0) {
+        actionItems.push({
+          type: 'PENDING_EVALUATION',
+          count: pendingEvalCount,
+          label: `${pendingEvalCount} phiếu đánh giá chờ xếp loại`,
+          route: '/departments/okr?tab=4',
+          severity: 'warning',
+        });
+      }
+      if (cycleProgressPercent > 50) {
+        const lateCount = allOkrs.filter(o => o.status === 'ACCEPTED').length;
+        if (lateCount > 0) {
+          actionItems.push({
+            type: 'LATE_SUBMISSION',
+            count: lateCount,
+            label: `${lateCount} người chưa nộp tự khai (đã qua ${Math.round(cycleProgressPercent)}% kỳ)`,
+            route: '/departments/okr?tab=3',
+            severity: 'info',
+          });
+        }
       }
     }
 
@@ -1216,12 +1245,22 @@ export class OkrService {
         endDate: currentCycle.endDate,
         progressPercent: Math.round(cycleProgressPercent),
         daysRemaining,
+        isFuture: isFutureCycle,
       } : null,
+      // Danh sách tất cả kỳ để FE render dropdown
+      allCycles: allCyclesList.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        startDate: c.startDate,
+        endDate: c.endDate,
+      })),
       summary,
       okrsByStatus,
       departmentStats,
       staffRanking,
       ratingDistribution,
+      ratingDetails,
       timelineData,
       actionItems,
     };
