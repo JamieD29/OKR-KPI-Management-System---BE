@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Objective } from '../../database/entities/objective.entity';
 import { UserOkr } from '../../database/entities/performance/user-okr.entity';
 import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
@@ -116,9 +116,75 @@ export class OkrService {
     return new Date(okr.deadline) < new Date();
   }
 
+  /**
+   * Tự động nộp bài tự khai OKR và phiếu tự đánh giá khi kỳ đánh giá đã kết thúc hoặc đóng lại.
+   * Logic: Nếu kỳ đánh giá đã đóng (CLOSED) hoặc qua ngày kết thúc (endDate < now)
+   * -> Auto chuyển OKR từ ACCEPTED sang SUBMITTED
+   * -> Auto chuyển UserEvaluation từ PENDING_EVALUATION sang SUBMITTED
+   */
+  private async checkAndAutoSubmitAllExpiredReports(): Promise<void> {
+    try {
+      const now = new Date();
+      const cycles = await this.userOkrRepo.manager.getRepository(EvaluationCycle).find({
+        where: { isDel: false },
+      });
+      
+      const closedCycleIds = cycles
+        .filter(c => c.status === EvaluationStatus.CLOSED || (c.endDate && new Date(c.endDate) < now))
+        .map(c => c.id);
+
+      if (closedCycleIds.length === 0) return;
+
+      // 1. Tự động nộp các bản OKR đã ACCEPTED của tất cả các user thuộc các kỳ đã quá hạn/đóng
+      const okrs = await this.userOkrRepo.find({
+        where: {
+          cycleId: In(closedCycleIds),
+          status: 'ACCEPTED',
+        },
+      });
+
+      for (const okr of okrs) {
+        okr.status = 'SUBMITTED';
+        okr.selfReportData = okr.selfReportData || {};
+        okr.totalScore = this.calculateOkrScore(okr.keyResults, okr.selfReportData);
+        await this.userOkrRepo.save(okr);
+
+        await this.notificationService.create(
+          okr.userId,
+          `⏰ OKR "${okr.objective}" của bạn đã được hệ thống tự động nộp tự khai điểm (${okr.totalScore} điểm) do hết hạn kỳ đánh giá.`,
+        );
+      }
+
+      // 2. Tự động nộp các Phiếu Đánh Giá đang ở trạng thái PENDING_EVALUATION của các kỳ đã quá hạn/đóng
+      const evs = await this.userEvaluationRepo.find({
+        where: {
+          cycleId: In(closedCycleIds),
+          status: 'PENDING_EVALUATION',
+        },
+      });
+
+      for (const ev of evs) {
+        ev.status = 'SUBMITTED';
+        ev.selfComment = ev.selfComment || 'Hệ thống tự động nộp do quá hạn kỳ đánh giá.';
+        ev.selfRating = ev.selfRating || 'GOOD';
+        await this.userEvaluationRepo.save(ev);
+
+        await this.notificationService.create(
+          ev.userId,
+          `⏰ Phiếu Đánh Giá chất lượng của bạn đã được hệ thống tự động nộp do hết hạn kỳ đánh giá. Trạng thái: Chờ duyệt.`,
+        );
+      }
+    } catch (err) {
+      console.error('Lỗi khi chạy tự động nộp OKR/Phiếu đánh giá quá hạn toàn hệ thống:', err);
+    }
+  }
+
   // --- OKR NEGOTIATION + SELF-REPORT WORKFLOW ---
 
   async getMyOkrs(userId: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     const okrs = await this.userOkrRepo.find({
       where: { userId },
       relations: ['cycle'],
@@ -714,6 +780,9 @@ export class OkrService {
   // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
 
   async getSubmittedOkrs(status: string = 'SUBMITTED', requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
 
     const okrs = await this.userOkrRepo.find({
@@ -816,6 +885,9 @@ export class OkrService {
   }
 
   async getMyEvaluationForm(userId: string, cycleId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     let targetCycleId = cycleId;
 
     if (!targetCycleId) {
@@ -952,6 +1024,9 @@ export class OkrService {
   }
 
   async getSubmittedEvaluations(requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
 
     const evaluations = await this.userEvaluationRepo.find({
@@ -1015,6 +1090,9 @@ export class OkrService {
   // ==========================================
 
   async getDeanDashboard(requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
 
     // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
