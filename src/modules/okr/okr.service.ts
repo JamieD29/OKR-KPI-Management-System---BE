@@ -908,12 +908,8 @@ export class OkrService {
     if (!form) throw new NotFoundException('Evaluation Form not found');
 
     // Cập nhật phần tự nhận xét
-    const whereClause: any = { userId };
-    if (body.cycleId) {
-      whereClause.cycleId = body.cycleId;
-    }
     const entity = await this.userEvaluationRepo.findOne({ 
-      where: whereClause,
+      where: { id: form.id },
       relations: ['user', 'user.department', 'cycle']
     });
     if (!entity) throw new NotFoundException('Evaluation Form not found');

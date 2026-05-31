@@ -129,6 +129,11 @@ export class SubmitEvaluationFormDto {
   @IsOptional()
   @IsString()
   selfRating?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'UUID của kỳ đánh giá.' })
+  @IsOptional()
+  @IsUUID('4')
+  cycleId?: string;
 }
 
 export class ManagerReviewEvaluationDto {
