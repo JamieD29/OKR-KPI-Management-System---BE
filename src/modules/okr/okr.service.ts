@@ -25,6 +25,25 @@ export class OkrService {
     private notificationService: NotificationService,
   ) {}
 
+  private async getRestrictDeptId(userId?: string): Promise<string | null> {
+    if (!userId) return null;
+    const user = await this.userOkrRepo.manager.getRepository(User).findOne({
+      where: { id: userId },
+      relations: ['managementPosition', 'department', 'roles'],
+    });
+    if (!user) return null;
+
+    const isAdmin = user.roles?.some(r => r.slug === 'ADMIN');
+    if (isAdmin) {
+      return null;
+    }
+
+    if (user.managementPosition?.permissionLevel === 'DON_VI') {
+      return user.department?.id || null;
+    }
+    return null;
+  }
+
   // Hàm LƯU OKR MỚI (Department objectives - legacy)
   async createDepartmentOkr(data: any) {
     try {
@@ -110,7 +129,17 @@ export class OkrService {
     return this.checkAndAutoAcceptExpired(okrs);
   }
 
-  async getPendingApproval() {
+  async getAssignedUsersInCycle(cycleId: string): Promise<string[]> {
+    const okrs = await this.userOkrRepo.find({
+      where: { cycleId },
+      select: ['userId'],
+    });
+    return okrs.map(o => o.userId);
+  }
+
+  async getPendingApproval(requesterId?: string) {
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
     const okrs = await this.userOkrRepo.find({
       where: [
         { status: 'NEGOTIATING' },
@@ -122,7 +151,12 @@ export class OkrService {
 
     // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn đang đàm phán
     await this.checkAndAutoAcceptExpired(okrs);
-    return okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
+
+    let filtered = okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
+    if (restrictDeptId) {
+      filtered = filtered.filter(o => o.user?.department?.id === restrictDeptId);
+    }
+    return filtered;
   }
 
   async acceptOkr(id: string, userId: string) {
@@ -679,12 +713,19 @@ export class OkrService {
 
   // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
 
-  async getSubmittedOkrs(status: string = 'SUBMITTED') {
-    return this.userOkrRepo.find({
+  async getSubmittedOkrs(status: string = 'SUBMITTED', requesterId?: string) {
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
+    const okrs = await this.userOkrRepo.find({
       where: { status },
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
+
+    if (restrictDeptId) {
+      return okrs.filter(o => o.user?.department?.id === restrictDeptId);
+    }
+    return okrs;
   }
 
   async managerReviewOkr(id: string, managerReportData: any) {
@@ -914,11 +955,18 @@ export class OkrService {
     return saved;
   }
 
-  async getSubmittedEvaluations() {
-    return this.userEvaluationRepo.find({
+  async getSubmittedEvaluations(requesterId?: string) {
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
+    const evaluations = await this.userEvaluationRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
+
+    if (restrictDeptId) {
+      return evaluations.filter(e => e.user?.department?.id === restrictDeptId);
+    }
+    return evaluations;
   }
 
   async managerReviewEvaluation(id: string, body: any) {
@@ -970,7 +1018,9 @@ export class OkrService {
   // --- DEAN DASHBOARD: API TỔNG HỢP ---
   // ==========================================
 
-  async getDeanDashboard() {
+  async getDeanDashboard(requesterId?: string) {
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
     // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
     const cycles = await this.userEvaluationRepo.manager
       .getRepository(EvaluationCycle)
@@ -998,21 +1048,27 @@ export class OkrService {
     }
 
     // 2. Lấy TẤT CẢ OKR (kèm user, department)
-    const allOkrs = await this.userOkrRepo.find({
+    let allOkrs = await this.userOkrRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
     // 3. Lấy tất cả phiếu đánh giá
-    const allEvaluations = await this.userEvaluationRepo.find({
+    let allEvaluations = await this.userEvaluationRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
     // 4. Lấy tất cả departments
-    const departments = await this.userEvaluationRepo.manager
+    let departments = await this.userEvaluationRepo.manager
       .getRepository('Department')
       .find({ relations: ['users'], order: { name: 'ASC' } }) as any[];
+
+    if (restrictDeptId) {
+      allOkrs = allOkrs.filter(o => o.user?.department?.id === restrictDeptId);
+      allEvaluations = allEvaluations.filter(e => e.user?.department?.id === restrictDeptId);
+      departments = departments.filter(d => d.id === restrictDeptId);
+    }
 
     // 5. Tổng hợp SUMMARY
     const statusCounts: Record<string, number> = {

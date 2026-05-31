@@ -88,8 +88,43 @@ export class OkrTemplateService {
     }
   }
 
+  private async generateUniqueTitle(title: string, excludeId?: string): Promise<string> {
+    const query = this.okrTemplateRepository.createQueryBuilder('template')
+      .select('template.title', 'title');
+    if (excludeId) {
+      query.where('template.id != :excludeId', { excludeId });
+    }
+    const templates = await query.getRawMany();
+    const existingTitles = templates.map(t => t.title.toLowerCase());
+
+    const titleLower = title.toLowerCase();
+    if (!existingTitles.includes(titleLower)) {
+      return title;
+    }
+
+    let baseTitle = title;
+    let startCounter = 1;
+    const match = title.match(/^(.*)\((\d+)\)$/);
+    if (match) {
+      baseTitle = match[1];
+      startCounter = parseInt(match[2], 10) + 1;
+    }
+
+    let counter = startCounter;
+    let newTitle = `${baseTitle}(${counter})`;
+    while (existingTitles.includes(newTitle.toLowerCase())) {
+      counter++;
+      newTitle = `${baseTitle}(${counter})`;
+    }
+    return newTitle;
+  }
+
   async create(createDto: any, userId?: string) {
     this.validateTemplateStructure(createDto.structure);
+
+    if (createDto.title) {
+      createDto.title = await this.generateUniqueTitle(createDto.title);
+    }
     
     console.log('[DEBUG OkrTemplateService.create] Received userId:', userId);
     if (userId) {
@@ -118,6 +153,11 @@ export class OkrTemplateService {
     if (!isAdmin && userId && template.createdByUserId !== userId) {
       throw new ForbiddenException('Bạn không có quyền chỉnh sửa template này.');
     }
+
+    if (updateDto.title && updateDto.title !== template.title) {
+      updateDto.title = await this.generateUniqueTitle(updateDto.title, id);
+    }
+
     const updated = Object.assign(template, updateDto);
     return this.okrTemplateRepository.save(updated);
   }
@@ -131,10 +171,10 @@ export class OkrTemplateService {
     return { success: true };
   }
 
-  // Chức năng "Áp dụng Template": Tạo UserOkr + Gửi thông báo cho NHIỀU user
   async applyTemplate(
     templateId: string,
     applyDto: { userIds: string[]; cycleId: string; deadline?: Date },
+    requesterId?: string,
   ) {
     const template = await this.findOne(templateId);
     if (!template.structure || template.structure.length === 0) {
@@ -145,13 +185,38 @@ export class OkrTemplateService {
       throw new BadRequestException('Phải chọn ít nhất 1 người để giao OKR');
     }
 
+    // 1. Kiểm tra giới hạn phòng ban của người yêu cầu
+    let restrictDeptId: string | null = null;
+    if (requesterId) {
+      const requester = await this.userRepository.findOne({
+        where: { id: requesterId },
+        relations: ['managementPosition', 'department', 'roles'],
+      });
+      if (requester) {
+        const isAdmin = requester.roles?.some(r => r.slug === 'ADMIN');
+        if (!isAdmin && requester.managementPosition?.permissionLevel === 'DON_VI') {
+          restrictDeptId = requester.department?.id || null;
+        }
+      }
+    }
+
     const results: any[] = [];
 
     for (const userId of applyDto.userIds) {
-      const user = await this.userRepository.findOne({ where: { id: userId } });
+      const user = await this.userRepository.findOne({ 
+        where: { id: userId },
+        relations: ['department']
+      });
       if (!user) {
         console.warn(`⚠️ User with ID ${userId} not found, skipping...`);
         continue;
+      }
+
+      // 2. Kiểm tra nếu nhân viên được gán nằm ngoài bộ môn quản lý
+      if (restrictDeptId && user.department?.id !== restrictDeptId) {
+        throw new ForbiddenException(
+          `Bạn không có quyền giao OKR cho nhân sự "${user.name || user.email}" vì người này thuộc bộ môn khác.`
+        );
       }
 
       // Kiểm tra xem User đã có OKR trong kỳ đánh giá này chưa
@@ -160,38 +225,23 @@ export class OkrTemplateService {
       });
 
       if (userOkr) {
-        // Nếu OKR hiện tại đã chốt hoặc đã nộp báo cáo/hoàn thành, không cho phép gán đè
-        if (
-          userOkr.status === 'ACCEPTED' ||
-          userOkr.status === 'SUBMITTED' ||
-          userOkr.status === 'COMPLETED'
-        ) {
-          throw new BadRequestException(
-            `Nhân sự ${user.name || user.email} đã chốt hoặc đang nộp báo cáo OKR cho kỳ này. Không thể gán đè template mới.`
-          );
-        }
-
-        // Nếu đang ở trạng thái PENDING hoặc NEGOTIATING, cập nhật lại cấu trúc template mới
-        userOkr.objective = template.title;
-        userOkr.keyResults = template.structure;
-        userOkr.templateId = templateId;
-        userOkr.status = 'PENDING';
-        userOkr.deadline = applyDto.deadline ? new Date(applyDto.deadline) : null;
-        userOkr.proposedChanges = null; // Reset lại các đề xuất cũ
-      } else {
-        // Nếu chưa có, tạo mới hoàn toàn
-        userOkr = this.userOkrRepository.create({
-          user: user,
-          userId: userId,
-          cycleId: applyDto.cycleId,
-          objective: template.title,
-          keyResults: template.structure,
-          totalScore: 0,
-          templateId: templateId,
-          status: 'PENDING',
-          deadline: applyDto.deadline,
-        });
+        throw new BadRequestException(
+          `Nhân sự ${user.name || user.email} đã được giao OKR trong kỳ này. Mỗi nhân sự chỉ được giao tối đa 1 OKR mỗi kỳ.`
+        );
       }
+
+      // Tạo mới hoàn toàn
+      userOkr = this.userOkrRepository.create({
+        user: user,
+        userId: userId,
+        cycleId: applyDto.cycleId,
+        objective: template.title,
+        keyResults: template.structure,
+        totalScore: 0,
+        templateId: templateId,
+        status: 'PENDING',
+        deadline: applyDto.deadline,
+      });
 
       const saved = await this.userOkrRepository.save(userOkr);
       results.push(saved);

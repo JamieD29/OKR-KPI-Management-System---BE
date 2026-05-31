@@ -134,10 +134,25 @@ export class UsersController {
   })
   @ApiInternalServerErrorResponse()
   async findByRole(
+    @Req() req: any,
     @Query('positionId') positionId?: string,
     @Query('jobTitle') jobTitle?: string,
   ) {
-    return this.usersService.findByRole(positionId, jobTitle);
+    const requester = await this.usersService.findOne(req.user.id);
+    const isAdmin = requester.roles.some((r) => r.slug === RoleType.ADMIN);
+    const mngLevel = requester.managementPosition?.permissionLevel;
+
+    const isKhoa = mngLevel === PermissionLevel.KHOA || mngLevel === PermissionLevel.SYSTEM;
+    const isDonVi = mngLevel === PermissionLevel.DON_VI;
+
+    const users = await this.usersService.findByRole(positionId, jobTitle);
+
+    if (isDonVi && !isAdmin && !isKhoa) {
+      const filterDept = requester.department?.id;
+      return users.filter(u => u.department?.id === filterDept);
+    }
+
+    return users;
   }
 
   @Get()

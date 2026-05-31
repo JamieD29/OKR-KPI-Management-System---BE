@@ -44,7 +44,51 @@ export class DepartmentsService {
     return savedDept;
   }
 
-  findAll() {
+  async findAll(currentUser?: any) {
+    const userRoles = currentUser?.roles || [];
+    let isAdmin = userRoles.some((role: any) => {
+      const roleSlug = typeof role === 'string' ? role : role.slug;
+      return roleSlug === 'ADMIN';
+    });
+
+    if (currentUser?.id && !isAdmin) {
+      const user = await this.userRepository.findOne({
+        where: { id: currentUser.id },
+        relations: ['managementPosition', 'department', 'roles'],
+      });
+
+      if (user) {
+        isAdmin = user.roles?.some(r => r.slug === 'ADMIN') || false;
+        if (isAdmin) {
+          return this.getAllDepartments();
+        }
+
+        if (user.managementPosition?.permissionLevel === 'DON_VI') {
+          const deptId = user.department?.id;
+          if (deptId) {
+            return this.departmentRepository
+              .find({
+                where: { id: deptId },
+                relations: ['users'],
+              })
+              .then((depts) =>
+                depts.map((d) => ({
+                  ...d,
+                  memberCount: d.users ? d.users.length : 0,
+                  users: undefined,
+                })),
+              );
+          }
+        }
+      }
+    } else if (isAdmin) {
+      return this.getAllDepartments();
+    }
+
+    return this.getAllDepartments();
+  }
+
+  private getAllDepartments() {
     return this.departmentRepository
       .find({
         order: { name: 'ASC' },
