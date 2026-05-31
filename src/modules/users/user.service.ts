@@ -191,6 +191,36 @@ export class UsersService {
       if (!position) {
         throw new NotFoundException(`Chức vụ với ID "${positionId}" không tồn tại`);
       }
+
+      // Check unique constraints for TRUONG_KHOA and TRUONG_BO_MON
+      if (position.slug === 'TRUONG_KHOA') {
+        const existingDean = await this.userRepository.findOne({
+          where: { managementPosition: { slug: 'TRUONG_KHOA' } },
+        });
+        if (existingDean && existingDean.id !== userId) {
+          throw new BadRequestException(
+            `Đã có người giữ chức vụ Trưởng khoa (${existingDean.name || existingDean.email}). Mỗi khoa chỉ có duy nhất 1 Trưởng khoa.`,
+          );
+        }
+      } else if (position.slug === 'TRUONG_BO_MON') {
+        if (!user.department) {
+          throw new BadRequestException(
+            'Không thể gán chức vụ Trưởng bộ môn vì nhân sự này chưa thuộc bộ môn nào.',
+          );
+        }
+        const existingHead = await this.userRepository.findOne({
+          where: {
+            managementPosition: { slug: 'TRUONG_BO_MON' },
+            department: { id: user.department.id },
+          },
+        });
+        if (existingHead && existingHead.id !== userId) {
+          throw new BadRequestException(
+            `Bộ môn ${user.department.name} đã có Trưởng bộ môn (${existingHead.name || existingHead.email}). Mỗi bộ môn chỉ có duy nhất 1 Trưởng bộ môn.`,
+          );
+        }
+      }
+
       user.managementPosition = position;
 
       // Tạo thông báo cho user
@@ -227,6 +257,22 @@ export class UsersService {
       if (!department) {
         throw new NotFoundException(`Bộ môn với ID "${departmentId}" không tồn tại`);
       }
+
+      // Nếu user là Trưởng bộ môn, kiểm tra xem bộ môn đích đã có Trưởng bộ môn chưa
+      if (user.managementPosition?.slug === 'TRUONG_BO_MON') {
+        const existingHead = await this.userRepository.findOne({
+          where: {
+            managementPosition: { slug: 'TRUONG_BO_MON' },
+            department: { id: departmentId },
+          },
+        });
+        if (existingHead && existingHead.id !== userId) {
+          throw new BadRequestException(
+            `Bộ môn ${department.name} đã có Trưởng bộ môn (${existingHead.name || existingHead.email}). Không thể chuyển Trưởng bộ môn sang bộ môn này.`,
+          );
+        }
+      }
+
       user.department = department;
 
       // Tạo thông báo cho user

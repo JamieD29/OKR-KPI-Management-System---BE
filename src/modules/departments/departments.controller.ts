@@ -72,8 +72,8 @@ export class DepartmentsController {
     isArray: true,
   })
   @ApiInternalServerErrorResponse({ description: 'Lỗi DB.' })
-  findAll() {
-    return this.departmentsService.findAll();
+  findAll(@Req() req: any) {
+    return this.departmentsService.findAll(req.user);
   }
 
   @Patch(':id')

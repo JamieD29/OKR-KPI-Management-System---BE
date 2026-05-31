@@ -163,11 +163,12 @@ export class OkrTemplateController {
   })
   @ApiNotFoundResponse({ description: 'Template id không tồn tại.' })
   @ApiInternalServerErrorResponse()
-  applyTemplate(@Param('id') id: string, @Body() applyDto: ApplyTemplateDto) {
+  applyTemplate(@Param('id') id: string, @Body() applyDto: ApplyTemplateDto, @Request() req: any) {
+    const userId = req.user?.id || req.user?.sub;
     return this.okrTemplateService.applyTemplate(id, {
       userIds: applyDto.userIds,
       cycleId: applyDto.cycleId,
       deadline: applyDto.deadline ? new Date(applyDto.deadline) : undefined,
-    });
+    }, userId);
   }
 }

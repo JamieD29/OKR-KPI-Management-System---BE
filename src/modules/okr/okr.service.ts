@@ -5,7 +5,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Objective } from '../../database/entities/objective.entity';
 import { UserOkr } from '../../database/entities/performance/user-okr.entity';
 import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
@@ -24,6 +24,25 @@ export class OkrService {
     private userEvaluationRepo: Repository<UserEvaluation>,
     private notificationService: NotificationService,
   ) {}
+
+  private async getRestrictDeptId(userId?: string): Promise<string | null> {
+    if (!userId) return null;
+    const user = await this.userOkrRepo.manager.getRepository(User).findOne({
+      where: { id: userId },
+      relations: ['managementPosition', 'department', 'roles'],
+    });
+    if (!user) return null;
+
+    const isAdmin = user.roles?.some(r => r.slug === 'ADMIN');
+    if (isAdmin) {
+      return null;
+    }
+
+    if (user.managementPosition?.permissionLevel === 'DON_VI') {
+      return user.department?.id || null;
+    }
+    return null;
+  }
 
   // Hàm LƯU OKR MỚI (Department objectives - legacy)
   async createDepartmentOkr(data: any) {
@@ -97,9 +116,75 @@ export class OkrService {
     return new Date(okr.deadline) < new Date();
   }
 
+  /**
+   * Tự động nộp bài tự khai OKR và phiếu tự đánh giá khi kỳ đánh giá đã kết thúc hoặc đóng lại.
+   * Logic: Nếu kỳ đánh giá đã đóng (CLOSED) hoặc qua ngày kết thúc (endDate < now)
+   * -> Auto chuyển OKR từ ACCEPTED sang SUBMITTED
+   * -> Auto chuyển UserEvaluation từ PENDING_EVALUATION sang SUBMITTED
+   */
+  private async checkAndAutoSubmitAllExpiredReports(): Promise<void> {
+    try {
+      const now = new Date();
+      const cycles = await this.userOkrRepo.manager.getRepository(EvaluationCycle).find({
+        where: { isDel: false },
+      });
+      
+      const closedCycleIds = cycles
+        .filter(c => c.status === EvaluationStatus.CLOSED || (c.endDate && new Date(c.endDate) < now))
+        .map(c => c.id);
+
+      if (closedCycleIds.length === 0) return;
+
+      // 1. Tự động nộp các bản OKR đã ACCEPTED của tất cả các user thuộc các kỳ đã quá hạn/đóng
+      const okrs = await this.userOkrRepo.find({
+        where: {
+          cycleId: In(closedCycleIds),
+          status: 'ACCEPTED',
+        },
+      });
+
+      for (const okr of okrs) {
+        okr.status = 'SUBMITTED';
+        okr.selfReportData = okr.selfReportData || {};
+        okr.totalScore = this.calculateOkrScore(okr.keyResults, okr.selfReportData);
+        await this.userOkrRepo.save(okr);
+
+        await this.notificationService.create(
+          okr.userId,
+          `⏰ OKR "${okr.objective}" của bạn đã được hệ thống tự động nộp tự khai điểm (${okr.totalScore} điểm) do hết hạn kỳ đánh giá.`,
+        );
+      }
+
+      // 2. Tự động nộp các Phiếu Đánh Giá đang ở trạng thái PENDING_EVALUATION của các kỳ đã quá hạn/đóng
+      const evs = await this.userEvaluationRepo.find({
+        where: {
+          cycleId: In(closedCycleIds),
+          status: 'PENDING_EVALUATION',
+        },
+      });
+
+      for (const ev of evs) {
+        ev.status = 'SUBMITTED';
+        ev.selfComment = ev.selfComment || 'Hệ thống tự động nộp do quá hạn kỳ đánh giá.';
+        ev.selfRating = ev.selfRating || 'GOOD';
+        await this.userEvaluationRepo.save(ev);
+
+        await this.notificationService.create(
+          ev.userId,
+          `⏰ Phiếu Đánh Giá chất lượng của bạn đã được hệ thống tự động nộp do hết hạn kỳ đánh giá. Trạng thái: Chờ duyệt.`,
+        );
+      }
+    } catch (err) {
+      console.error('Lỗi khi chạy tự động nộp OKR/Phiếu đánh giá quá hạn toàn hệ thống:', err);
+    }
+  }
+
   // --- OKR NEGOTIATION + SELF-REPORT WORKFLOW ---
 
   async getMyOkrs(userId: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     const okrs = await this.userOkrRepo.find({
       where: { userId },
       relations: ['cycle'],
@@ -110,7 +195,17 @@ export class OkrService {
     return this.checkAndAutoAcceptExpired(okrs);
   }
 
-  async getPendingApproval() {
+  async getAssignedUsersInCycle(cycleId: string): Promise<string[]> {
+    const okrs = await this.userOkrRepo.find({
+      where: { cycleId },
+      select: ['userId'],
+    });
+    return okrs.map(o => o.userId);
+  }
+
+  async getPendingApproval(requesterId?: string) {
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
     const okrs = await this.userOkrRepo.find({
       where: [
         { status: 'NEGOTIATING' },
@@ -122,7 +217,12 @@ export class OkrService {
 
     // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn đang đàm phán
     await this.checkAndAutoAcceptExpired(okrs);
-    return okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
+
+    let filtered = okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
+    if (restrictDeptId) {
+      filtered = filtered.filter(o => o.user?.department?.id === restrictDeptId);
+    }
+    return filtered;
   }
 
   async acceptOkr(id: string, userId: string) {
@@ -679,12 +779,22 @@ export class OkrService {
 
   // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
 
-  async getSubmittedOkrs(status: string = 'SUBMITTED') {
-    return this.userOkrRepo.find({
+  async getSubmittedOkrs(status: string = 'SUBMITTED', requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
+    const okrs = await this.userOkrRepo.find({
       where: { status },
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
+
+    if (restrictDeptId) {
+      return okrs.filter(o => o.user?.department?.id === restrictDeptId);
+    }
+    return okrs;
   }
 
   async managerReviewOkr(id: string, managerReportData: any) {
@@ -775,6 +885,9 @@ export class OkrService {
   }
 
   async getMyEvaluationForm(userId: string, cycleId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
     let targetCycleId = cycleId;
 
     if (!targetCycleId) {
@@ -867,12 +980,8 @@ export class OkrService {
     if (!form) throw new NotFoundException('Evaluation Form not found');
 
     // Cập nhật phần tự nhận xét
-    const whereClause: any = { userId };
-    if (body.cycleId) {
-      whereClause.cycleId = body.cycleId;
-    }
     const entity = await this.userEvaluationRepo.findOne({ 
-      where: whereClause,
+      where: { id: form.id },
       relations: ['user', 'user.department', 'cycle']
     });
     if (!entity) throw new NotFoundException('Evaluation Form not found');
@@ -914,11 +1023,21 @@ export class OkrService {
     return saved;
   }
 
-  async getSubmittedEvaluations() {
-    return this.userEvaluationRepo.find({
+  async getSubmittedEvaluations(requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
+    const evaluations = await this.userEvaluationRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
+
+    if (restrictDeptId) {
+      return evaluations.filter(e => e.user?.department?.id === restrictDeptId);
+    }
+    return evaluations;
   }
 
   async managerReviewEvaluation(id: string, body: any) {
@@ -970,9 +1089,14 @@ export class OkrService {
   // --- DEAN DASHBOARD: API TỔNG HỢP ---
   // ==========================================
 
-  async getDeanDashboard(cycleId?: string) {
-    // 1. Lấy tất cả kỳ đánh giá (để FE render dropdown)
-    const allCyclesList = await this.userEvaluationRepo.manager
+  async getDeanDashboard(requesterId?: string) {
+    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    await this.checkAndAutoSubmitAllExpiredReports();
+
+    const restrictDeptId = await this.getRestrictDeptId(requesterId);
+
+    // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
+    const cycles = await this.userEvaluationRepo.manager
       .getRepository(EvaluationCycle)
       .find({ where: { isDel: false }, order: { createdAt: 'DESC' } });
 
@@ -1009,25 +1133,28 @@ export class OkrService {
       daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // 2. Lấy OKR — lọc theo cycleId nếu có
-    const okrWhere: any = currentCycle ? { cycleId: currentCycle.id } : {};
-    const allOkrs = isFutureCycle ? [] : await this.userOkrRepo.find({
-      where: currentCycle ? { cycleId: currentCycle.id } : undefined,
+    // 2. Lấy TẤT CẢ OKR (kèm user, department)
+    let allOkrs = await this.userOkrRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
-    // 3. Lấy phiếu đánh giá — lọc theo cycleId nếu có
-    const allEvaluations = isFutureCycle ? [] : await this.userEvaluationRepo.find({
-      where: currentCycle ? { cycleId: currentCycle.id } : undefined,
+    // 3. Lấy tất cả phiếu đánh giá
+    let allEvaluations = await this.userEvaluationRepo.find({
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
     // 4. Lấy tất cả departments
-    const departments = await this.userEvaluationRepo.manager
+    let departments = await this.userEvaluationRepo.manager
       .getRepository('Department')
       .find({ relations: ['users'], order: { name: 'ASC' } }) as any[];
+
+    if (restrictDeptId) {
+      allOkrs = allOkrs.filter(o => o.user?.department?.id === restrictDeptId);
+      allEvaluations = allEvaluations.filter(e => e.user?.department?.id === restrictDeptId);
+      departments = departments.filter(d => d.id === restrictDeptId);
+    }
 
     // 5. Tổng hợp SUMMARY
     const statusCounts: Record<string, number> = {

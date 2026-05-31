@@ -49,8 +49,8 @@ export class OkrController {
   })
   @ApiOkResponse({ description: 'Dữ liệu dashboard tổng hợp' })
   @ApiInternalServerErrorResponse()
-  async getDeanDashboard(@Query('cycleId') cycleId?: string) {
-    return this.okrService.getDeanDashboard(cycleId);
+  async getDeanDashboard(@Request() req: any) {
+    return this.okrService.getDeanDashboard(req.user.id || req.user.sub);
   }
 
   @Post('department')
@@ -111,9 +111,18 @@ export class OkrController {
     isArray: true,
   })
   @ApiInternalServerErrorResponse()
-  async getPendingApproval() {
-    return this.okrService.getPendingApproval();
+  async getPendingApproval(@Request() req: any) {
+    return this.okrService.getPendingApproval(req.user.id || req.user.sub);
   }
+
+  @Get('assigned-users')
+  @ApiOperation({
+    summary: 'Lấy danh sách ID user đã được giao OKR trong một chu kỳ',
+  })
+  async getAssignedUsersInCycle(@Query('cycleId') cycleId: string) {
+    return this.okrService.getAssignedUsersInCycle(cycleId);
+  }
+
 
   @Put(':id/accept')
   @ApiOperation({
@@ -263,8 +272,8 @@ export class OkrController {
   // --- DEAN REVIEW SUBMITTED ---
 
   @Get('accepted')
-  async getAcceptedOkrs() {
-    return this.okrService.getSubmittedOkrs('ACCEPTED');
+  async getAcceptedOkrs(@Request() req: any) {
+    return this.okrService.getSubmittedOkrs('ACCEPTED', req.user.id || req.user.sub);
   }
 
   @Get('submitted')
@@ -274,8 +283,8 @@ export class OkrController {
   })
   @ApiOkResponse({ type: UserOkrSwaggerDto, isArray: true })
   @ApiInternalServerErrorResponse()
-  async getSubmittedOkrs() {
-    return this.okrService.getSubmittedOkrs('SUBMITTED');
+  async getSubmittedOkrs(@Request() req: any) {
+    return this.okrService.getSubmittedOkrs('SUBMITTED', req.user.id || req.user.sub);
   }
 
   @Get('completed')
@@ -285,8 +294,8 @@ export class OkrController {
   })
   @ApiOkResponse({ type: UserOkrSwaggerDto, isArray: true })
   @ApiInternalServerErrorResponse()
-  async getCompletedOkrs() {
-    return this.okrService.getSubmittedOkrs('COMPLETED');
+  async getCompletedOkrs(@Request() req: any) {
+    return this.okrService.getSubmittedOkrs('COMPLETED', req.user.id || req.user.sub);
   }
 
   @Put(':id/manager-review')
@@ -342,8 +351,8 @@ export class OkrController {
   })
   @ApiOkResponse({ type: UserEvaluationSwaggerDto, isArray: true })
   @ApiInternalServerErrorResponse()
-  async getSubmittedEvaluations() {
-    return this.okrService.getSubmittedEvaluations();
+  async getSubmittedEvaluations(@Request() req: any) {
+    return this.okrService.getSubmittedEvaluations(req.user.id || req.user.sub);
   }
 
   @Put('evaluations/:id/review')
