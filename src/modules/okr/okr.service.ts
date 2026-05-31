@@ -1089,7 +1089,7 @@ export class OkrService {
   // --- DEAN DASHBOARD: API TỔNG HỢP ---
   // ==========================================
 
-  async getDeanDashboard(requesterId?: string) {
+  async getDeanDashboard(requesterId?: string, cycleId?: string) {
     // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
     await this.checkAndAutoSubmitAllExpiredReports();
 
@@ -1103,11 +1103,11 @@ export class OkrService {
     // Xác định kỳ hiện tại đang xem
     let currentCycle: EvaluationCycle | null = null;
     if (cycleId) {
-      currentCycle = allCyclesList.find(c => c.id === cycleId) || null;
+      currentCycle = cycles.find(c => c.id === cycleId) || null;
     } else {
       // Mặc định: kỳ OPEN, nếu không có thì kỳ mới nhất
-      const openCycle = allCyclesList.find(c => c.status === EvaluationStatus.OPEN);
-      currentCycle = openCycle || allCyclesList[0] || null;
+      const openCycle = cycles.find(c => c.status === EvaluationStatus.OPEN);
+      currentCycle = openCycle || cycles[0] || null;
     }
 
     // Kiểm tra kỳ tương lai (startDate > now)
@@ -1375,7 +1375,7 @@ export class OkrService {
         isFuture: isFutureCycle,
       } : null,
       // Danh sách tất cả kỳ để FE render dropdown
-      allCycles: allCyclesList.map(c => ({
+      allCycles: cycles.map(c => ({
         id: c.id,
         name: c.name,
         status: c.status,

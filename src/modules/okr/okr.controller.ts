@@ -49,8 +49,8 @@ export class OkrController {
   })
   @ApiOkResponse({ description: 'Dữ liệu dashboard tổng hợp' })
   @ApiInternalServerErrorResponse()
-  async getDeanDashboard(@Request() req: any) {
-    return this.okrService.getDeanDashboard(req.user.id || req.user.sub);
+  async getDeanDashboard(@Request() req: any, @Query('cycleId') cycleId?: string) {
+    return this.okrService.getDeanDashboard(req.user.id || req.user.sub, cycleId);
   }
 
   @Post('department')
