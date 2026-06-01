@@ -140,6 +140,20 @@ export class UsersService {
     const user = await this.findOne(userId);
 
     const { departmentId, ...rest } = updateProfileDto;
+
+    // Check if staffCode already exists for another user in the system
+    if (rest.staffCode) {
+      const trimmedStaffCode = rest.staffCode.trim();
+      if (trimmedStaffCode) {
+        const existingUser = await this.userRepository.findOne({
+          where: { staffCode: trimmedStaffCode },
+        });
+        if (existingUser && existingUser.id !== userId) {
+          throw new ConflictException('Mã nhân sự này đã tồn tại trong hệ thống');
+        }
+      }
+    }
+
     Object.assign(user, rest);
 
     if (departmentId) {
