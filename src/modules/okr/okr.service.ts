@@ -1133,14 +1133,24 @@ export class OkrService {
       daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // 2. Lấy TẤT CẢ OKR (kèm user, department)
+    // 2. Lấy OKR theo kỳ đang xem (kèm user, department)
+    const okrWhere: any = {};
+    if (currentCycle) {
+      okrWhere.cycleId = currentCycle.id;
+    }
     let allOkrs = await this.userOkrRepo.find({
+      where: okrWhere,
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
 
-    // 3. Lấy tất cả phiếu đánh giá
+    // 3. Lấy phiếu đánh giá theo kỳ đang xem
+    const evalWhere: any = {};
+    if (currentCycle) {
+      evalWhere.cycleId = currentCycle.id;
+    }
     let allEvaluations = await this.userEvaluationRepo.find({
+      where: evalWhere,
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       order: { updatedAt: 'DESC' },
     });
@@ -1280,42 +1290,8 @@ export class OkrService {
       }
     }
 
-    // 10. Timeline: OKR hoàn thành theo tuần
+    // 10. Timeline: OKR hoàn thành theo tuần (Đã lược bỏ vì không sử dụng)
     const timelineData: Array<{ week: string; weekLabel: string; completed: number; submitted: number }> = [];
-    if (!isFutureCycle && currentCycle?.startDate && currentCycle?.endDate) {
-      const start = new Date(currentCycle.startDate);
-      const end = new Date(currentCycle.endDate);
-      const effectiveEnd = now < end ? now : end;
-
-      const weekStart = new Date(start);
-      let weekNum = 1;
-      while (weekStart <= effectiveEnd) {
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6);
-
-        const completedInWeek = allOkrs.filter(o => {
-          if (o.status !== 'COMPLETED' || !o.updatedAt) return false;
-          const d = new Date(o.updatedAt);
-          return d >= weekStart && d <= weekEnd;
-        }).length;
-
-        const submittedInWeek = allOkrs.filter(o => {
-          if ((o.status !== 'SUBMITTED' && o.status !== 'COMPLETED') || !o.updatedAt) return false;
-          const d = new Date(o.updatedAt);
-          return d >= weekStart && d <= weekEnd;
-        }).length;
-
-        timelineData.push({
-          week: weekStart.toISOString().split('T')[0],
-          weekLabel: `Tuần ${weekNum}`,
-          completed: completedInWeek,
-          submitted: submittedInWeek,
-        });
-
-        weekStart.setDate(weekStart.getDate() + 7);
-        weekNum++;
-      }
-    }
 
     // 11. Action items (chỉ có ý nghĩa với kỳ đang OPEN)
     const actionItems: Array<{ type: string; count: number; label: string; route: string; severity: string }> = [];
