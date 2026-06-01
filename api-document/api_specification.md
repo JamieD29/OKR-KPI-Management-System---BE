@@ -18,6 +18,7 @@
 - `GET /users` — [`users-list.md`](./users/users-list.md) (JWT, phân quyền theo permissionLevel)
 - `PUT /users/:id/roles` — [`users-update-roles.md`](./users/users-update-roles.md) (Admin)
 - `PUT /users/:id/management-position` — [`users-assign-management-position.md`](./users/users-assign-management-position.md) (Admin)
+- `PUT /users/:id/department` — [`users-assign-department.md`](./users/users-assign-department.md) (Admin)
 
 ## Departments (`api-document/departments/`)
 
@@ -36,25 +37,31 @@
 ## Notification (`api-document/notification/`)
 
 - `GET /notifications` — [`notification-get-unread.md`](./notification/notification-get-unread.md) (JWT)
-- `GET /notifications/read` — [`notification-get-read.md`](./notification/notification-get-read.md) (JWT)
 - `GET /notifications/all` — [`notification-get-all.md`](./notification/notification-get-all.md) (JWT, max 50)
 - `PATCH /notifications/:id/read` — [`notification-mark-as-read.md`](./notification/notification-mark-as-read.md) (JWT)
 - `PATCH /notifications/read-all` — [`notification-mark-all-as-read.md`](./notification/notification-mark-all-as-read.md) (JWT)
 
 ## OKR (`api-document/okr/`)
 
+- `GET /okrs/dean-dashboard` — [`okr-dean-dashboard.md`](./okr/okr-dean-dashboard.md) (JWT — Trưởng khoa)
 - `POST /okrs/department` — [`okr-create-department-okr.md`](./okr/okr-create-department-okr.md) (JWT)
 - `GET /okrs/department` — [`okr-get-department-okrs.md`](./okr/okr-get-department-okrs.md) (JWT)
 - `GET /okrs/my` — [`okr-get-my-okrs.md`](./okr/okr-get-my-okrs.md) (JWT)
 - `GET /okrs/pending-approval` — [`okr-get-pending-approval.md`](./okr/okr-get-pending-approval.md) (JWT)
-- `PUT /okrs/:id/accept` — [`okr-accept.md`](./okr/okr-accept.md) (JWT)
-- `POST /okrs/:id/chat` — [`okr-chat-item.md`](./okr/okr-chat-item.md) (JWT)
-- `PUT /okrs/:id/edit-item` — [`okr-edit-item-properties.md`](./okr/okr-edit-item-properties.md) (JWT)
-- `PUT /okrs/:id/dean-approve` — [`okr-dean-approve.md`](./okr/okr-dean-approve.md) (JWT)
-- `PUT /okrs/:id/dean-reject` — [`okr-dean-reject.md`](./okr/okr-dean-reject.md) (JWT)
-- `PUT /okrs/:id/self-report` — [`okr-submit-self-report.md`](./okr/okr-submit-self-report.md) (JWT)
+- `GET /okrs/accepted` — [`okr-get-accepted.md`](./okr/okr-get-accepted.md) (JWT)
 - `GET /okrs/submitted` — [`okr-get-submitted.md`](./okr/okr-get-submitted.md) (JWT)
 - `GET /okrs/completed` — [`okr-get-completed.md`](./okr/okr-get-completed.md) (JWT)
+- `PUT /okrs/:id/accept` — [`okr-accept.md`](./okr/okr-accept.md) (JWT)
+- `PUT /okrs/:id/send-for-approval` — [`okr-send-for-approval.md`](./okr/okr-send-for-approval.md) (JWT)
+- `POST /okrs/:id/chat` — [`okr-chat-item.md`](./okr/okr-chat-item.md) (JWT)
+- `PUT /okrs/:id/edit-item` — [`okr-edit-item-properties.md`](./okr/okr-edit-item-properties.md) (JWT)
+- `PUT /okrs/:id/structure` — [`okr-update-structure.md`](./okr/okr-update-structure.md) (JWT — user đề xuất)
+- `PUT /okrs/:id/manager-structure` — [`okr-manager-update-structure.md`](./okr/okr-manager-update-structure.md) (JWT — manager phản hồi)
+- `PUT /okrs/:id/extend-deadline` — [`okr-extend-deadline.md`](./okr/okr-extend-deadline.md) (JWT — Trưởng khoa/Admin)
+- `PUT /okrs/:id/dean-approve` — [`okr-dean-approve.md`](./okr/okr-dean-approve.md) (JWT)
+- `PUT /okrs/:id/dean-reject` — [`okr-dean-reject.md`](./okr/okr-dean-reject.md) (JWT)
+- `PUT /okrs/:id/draft-report` — [`okr-draft-self-report.md`](./okr/okr-draft-self-report.md) (JWT — lưu nháp, không nộp)
+- `PUT /okrs/:id/self-report` — [`okr-submit-self-report.md`](./okr/okr-submit-self-report.md) (JWT)
 - `PUT /okrs/:id/manager-review` — [`okr-manager-review.md`](./okr/okr-manager-review.md) (JWT)
 - `GET /okrs/evaluations/my` — [`okr-get-my-evaluation-form.md`](./okr/okr-get-my-evaluation-form.md) (JWT)
 - `POST /okrs/evaluations/my/submit` — [`okr-submit-my-evaluation-form.md`](./okr/okr-submit-my-evaluation-form.md) (JWT)
@@ -74,8 +81,9 @@
 ## Performance (`api-document/performance/`)
 
 - `GET /performance/cycles` — [`performance-get-cycles.md`](./performance/performance-get-cycles.md)
-- `POST /performance/admin/cycles` — [`performance-create-cycle.md`](./performance/performance-create-cycle.md)
+- `POST /performance/admin/cycles` — [`performance-create-cycle.md`](./performance/performance-create-cycle.md) (body có thêm `bypassValidation` cho testing)
 - `PUT /performance/admin/cycles/:id/status` — [`performance-toggle-cycle-status.md`](./performance/performance-toggle-cycle-status.md)
+- `DELETE /performance/admin/cycles/:id` — [`performance-delete-cycle.md`](./performance/performance-delete-cycle.md) (soft-delete)
 
 ## Admin (`api-document/admin/`)
 
@@ -83,6 +91,8 @@
 - `POST /admin/domains` — [`admin-add-domain.md`](./admin/admin-add-domain.md)
 - `DELETE /admin/domains/:id` — [`admin-delete-domain.md`](./admin/admin-delete-domain.md)
 - `POST /admin/system/reset` — [`admin-factory-reset.md`](./admin/admin-factory-reset.md)
+- `GET /admin/dashboard` — [`admin-dashboard.md`](./admin/admin-dashboard.md) (Admin)
+- `GET /admin/system-health` — [`admin-system-health.md`](./admin/admin-system-health.md) (Admin)
 
 ## System Logs (`api-document/system-logs/`)
 
@@ -95,14 +105,14 @@
 
 | Module              | Số endpoint |
 | ------------------- | ----------- |
-| Auth                | 6           |
-| Users               | 7           |
+| Auth                | 7           |
+| Users               | 8           |
 | Departments         | 4           |
 | Management Position | 4           |
-| Notification        | 5           |
-| OKR                 | 17          |
+| Notification        | 4           |
+| OKR                 | 24          |
 | OKR Template        | 7           |
-| Performance         | 3           |
-| Admin               | 4           |
+| Performance         | 4           |
+| Admin               | 6           |
 | System Logs         | 2           |
-| **Tổng**            | **59**      |
+| **Tổng**            | **70**      |

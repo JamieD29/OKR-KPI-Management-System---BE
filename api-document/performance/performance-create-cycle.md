@@ -24,10 +24,11 @@ Không có.
 | name      | String     | √        | Tên kỳ đánh giá. VD: `"Học kỳ 1 - 2025-2026"`, `"Quý 2 - 2025"`                                                                                                                                                              |
 | type      | String     | √        | Loại chu kỳ. Giá trị hợp lệ (enum `CycleType`): `SEMESTER`, `QUARTER`, `OTHER`. Nếu truyền giá trị khác / rỗng, service ép về `OTHER` (xem `(type as CycleType) \|\| CycleType.OTHER`).                                      |
 | startDate | String (ISO) | √      | Ngày bắt đầu kỳ. Chuỗi parse được bằng `new Date(...)` (vd `YYYY-MM-DD` hoặc ISO datetime). **Bắt buộc `>= ngày hôm nay`** — nếu ở quá khứ sẽ trả 400.                                                                       |
-| endDate   | String (ISO) | √      | Ngày kết thúc kỳ. Chuỗi parse được bằng `new Date(...)`. **Bắt buộc `> startDate`** — nếu nhỏ hơn hoặc bằng `startDate` sẽ trả 400.                                                                                          |
+| endDate          | String (ISO) | √        | Ngày kết thúc kỳ. Chuỗi parse được bằng `new Date(...)`. **Bắt buộc `> startDate`** — nếu nhỏ hơn hoặc bằng `startDate` sẽ trả 400. |
+| bypassValidation | Boolean      |          | Mặc định `false`. Khi `true`, bỏ qua validation `startDate >= today` — **chỉ dùng cho môi trường test / development**. |
 
 
-> Lưu ý: Validation ở service: `startDate >= today` và `endDate > startDate`. Trường `status` không nhận từ client — luôn được set mặc định `CLOSED` khi tạo.
+> Lưu ý: Validation ở service: `startDate >= today` và `endDate > startDate` (trừ khi `bypassValidation = true`). Trường `status` không nhận từ client — luôn được set mặc định `CLOSED` khi tạo.
 
 ### Example Request
 
