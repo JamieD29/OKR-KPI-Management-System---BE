@@ -6,6 +6,7 @@ import {
   JobTitle,
 } from '../../../database/entities/user.entity';
 import { PermissionLevel } from '../../../database/entities/management-position.entity';
+import { ManagementPositionSwaggerDto } from '../../management-position/dto/management-position.dto';
 
 /** Một lựa chọn enum cho FE (profile-options). */
 export class ProfileEnumOptionDto {
@@ -61,28 +62,6 @@ export class DepartmentSwaggerDto {
   description?: string | null;
 }
 
-export class ManagementPositionSwaggerDto {
-  @ApiProperty({ format: 'uuid' })
-  id: string;
-
-  @ApiProperty({ example: 'Trưởng khoa' })
-  name: string;
-
-  @ApiProperty({ example: 'TRUONG_KHOA' })
-  slug: string;
-
-  @ApiPropertyOptional({ nullable: true })
-  description?: string | null;
-
-  @ApiProperty({ enum: PermissionLevel })
-  permissionLevel: PermissionLevel;
-
-  @ApiProperty({ type: String, format: 'date-time' })
-  createdAt: Date;
-
-  @ApiProperty({ type: String, format: 'date-time' })
-  updatedAt: Date;
-}
 
 /**
  * User đầy đủ như các thao tác findOne / findAll / findByRole (kèm roles, department,
