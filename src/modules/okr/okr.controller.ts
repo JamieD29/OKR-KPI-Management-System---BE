@@ -84,6 +84,22 @@ export class OkrController {
     return this.okrService.getDepartmentOkrs();
   }
 
+  @Get('department/:id/overview')
+  @ApiOperation({
+    summary: 'Tổng quan chi tiết bộ môn',
+    description: 'Lấy thông tin tiến độ OKR/KPI, danh sách mục tiêu cấp bộ môn và tiến độ từng thành viên.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'UUID của department' })
+  @ApiOkResponse({ description: 'Dữ liệu tổng quan chi tiết của bộ môn' })
+  @ApiInternalServerErrorResponse()
+  async getDepartmentOverview(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Query('cycleId') cycleId?: string
+  ) {
+    return this.okrService.getDepartmentOverview(id, req.user.id || req.user.sub, cycleId);
+  }
+
   // --- OKR NEGOTIATION ---
 
   @Get('my')

@@ -12,6 +12,7 @@ import { UserEvaluation } from '../../database/entities/performance/user-evaluat
 import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance/evaluation-cycle.entity';
 import { NotificationService } from '../notification/notification.service';
 import { User } from '../../database/entities/user.entity';
+import { Department } from '../../database/entities/department.entity';
 
 @Injectable()
 export class OkrService {
@@ -68,6 +69,153 @@ export class OkrService {
       relations: ['keyResults'],
       order: { createdAt: 'DESC' },
     });
+  }
+
+  // --- DEPARTMENT OVERVIEW ---
+  async getDepartmentOverview(deptId: string, userId: string, cycleId?: string) {
+    // 1. RBAC Check
+    const restrictDeptId = await this.getRestrictDeptId(userId);
+    if (restrictDeptId && restrictDeptId !== deptId) {
+      throw new BadRequestException('Bạn không có quyền xem tổng quan của bộ môn này');
+    }
+
+    // 2. Lấy thông tin Department
+    const departmentRepo = this.userOkrRepo.manager.getRepository(Department);
+    const department = await departmentRepo.findOne({
+      where: { id: deptId },
+      relations: ['users'],
+    });
+
+    if (!department) {
+      throw new NotFoundException('Không tìm thấy bộ môn');
+    }
+
+    // 3. Lấy Department Objectives
+    const whereCondition: any = { departmentId: deptId, type: 'DEPARTMENT' };
+    if (cycleId) {
+      whereCondition.cycleId = cycleId;
+    }
+    const objectives = await this.objectiveRepo.find({
+      where: whereCondition,
+      relations: ['keyResults'],
+      order: { createdAt: 'DESC' },
+    });
+
+    // 4. Lấy danh sách thành viên và OKR chi tiết
+    const memberIds = department.users ? department.users.map(u => u.id) : [];
+
+    let actionRequiredCount = 0;
+    let totalOkrs = 0;
+    let completedOrSubmitted = 0;
+    const staffOkrStatus: any[] = [];
+    const staffEvaluationStatus: any[] = [];
+
+    if (memberIds.length > 0) {
+      // --- OKR Status per staff ---
+      const okrWhere: any = { userId: In(memberIds) };
+      if (cycleId) okrWhere.cycleId = cycleId;
+
+      const userOkrs = await this.userOkrRepo.find({
+        where: okrWhere,
+        relations: ['user', 'cycle'],
+      });
+
+      totalOkrs = userOkrs.length;
+
+      // Group OKRs by user
+      const okrsByUser = new Map<string, any[]>();
+      for (const okr of userOkrs) {
+        if (okr.status === 'AT_RISK' || okr.status === 'OFF_TRACK' || okr.status === 'PENDING' || okr.status === 'NEGOTIATING') {
+          actionRequiredCount++;
+        }
+        if (okr.status === 'COMPLETED' || okr.status === 'SUBMITTED') {
+          completedOrSubmitted++;
+        }
+
+        if (!okrsByUser.has(okr.userId)) {
+          okrsByUser.set(okr.userId, []);
+        }
+        okrsByUser.get(okr.userId)!.push(okr);
+      }
+
+      // Build staffOkrStatus for each member
+      if (department.users) {
+        for (const user of department.users) {
+          const userOkrList = okrsByUser.get(user.id) || [];
+          staffOkrStatus.push({
+            userId: user.id,
+            name: user.name || user.email,
+            email: user.email,
+            avatar: user.avatarUrl,
+            okrs: userOkrList.map(okr => ({
+              id: okr.id,
+              objective: okr.objective,
+              status: okr.status,
+              totalScore: okr.totalScore || 0,
+              managerScore: okr.managerScore || null,
+              cycleName: okr.cycle?.name || null,
+            })),
+          });
+        }
+      }
+
+      // --- Evaluation Status per staff ---
+      const evalWhere: any = { userId: In(memberIds) };
+      if (cycleId) evalWhere.cycleId = cycleId;
+
+      const userEvaluations = await this.userEvaluationRepo.find({
+        where: evalWhere,
+        relations: ['user', 'cycle'],
+      });
+
+      // Group evaluations by user — take the latest one per user
+      const evalByUser = new Map<string, any>();
+      for (const ev of userEvaluations) {
+        const existing = evalByUser.get(ev.userId);
+        if (!existing || new Date(ev.updatedAt) > new Date(existing.updatedAt)) {
+          evalByUser.set(ev.userId, ev);
+        }
+      }
+
+      if (department.users) {
+        for (const user of department.users) {
+          const ev = evalByUser.get(user.id);
+          staffEvaluationStatus.push({
+            userId: user.id,
+            name: user.name || user.email,
+            email: user.email,
+            avatar: user.avatarUrl,
+            status: ev?.status || null,
+            selfRating: ev?.selfRating || null,
+            managerRating: ev?.managerRating || null,
+            selfScoreTotal: ev?.selfScoreTotal || 0,
+            principalScoreTotal: ev?.principalScoreTotal || 0,
+            cycleName: ev?.cycle?.name || null,
+          });
+        }
+      }
+    }
+
+    const completionRate = totalOkrs > 0
+      ? Math.round((completedOrSubmitted / totalOkrs) * 1000) / 10
+      : 0;
+
+    return {
+      department: {
+        id: department.id,
+        name: department.name,
+        code: department.code,
+        memberCount: memberIds.length,
+      },
+      metrics: {
+        totalOkrs,
+        completionRate,
+        actionRequired: actionRequiredCount,
+      },
+      objectives,
+      staffOkrStatus: staffOkrStatus.sort((a, b) => b.okrs.length - a.okrs.length),
+      staffEvaluationStatus,
+    };
   }
 
   // --- LAZY DEADLINE EVALUATION ---
@@ -1290,8 +1438,7 @@ export class OkrService {
       }
     }
 
-    // 10. Timeline: OKR hoàn thành theo tuần (Đã lược bỏ vì không sử dụng)
-    const timelineData: Array<{ week: string; weekLabel: string; completed: number; submitted: number }> = [];
+
 
     // 11. Action items (chỉ có ý nghĩa với kỳ đang OPEN)
     const actionItems: Array<{ type: string; count: number; label: string; route: string; severity: string }> = [];
@@ -1364,7 +1511,7 @@ export class OkrService {
       staffRanking,
       ratingDistribution,
       ratingDetails,
-      timelineData,
+
       actionItems,
     };
   }
