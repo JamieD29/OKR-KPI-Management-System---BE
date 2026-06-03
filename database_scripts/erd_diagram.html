@@ -219,6 +219,8 @@ erDiagram
         ENUM status
         DATE startDate
         DATE endDate
+        BOOLEAN is_del
+        BOOLEAN bypass_validation
         TIMESTAMP createdAt
         TIMESTAMP updatedAt
     }
@@ -248,9 +250,27 @@ erDiagram
         VARCHAR status
         JSONB proposedChanges
         TIMESTAMP deadline
+        TIMESTAMP acceptedAt
         JSONB selfReportData
         JSONB managerReportData
         FLOAT managerScore
+        TIMESTAMP createdAt
+        TIMESTAMP updatedAt
+    }
+
+    user_evaluations {
+        UUID id PK
+        UUID user_id FK
+        UUID cycle_id FK
+        FLOAT completionPercent
+        FLOAT selfScoreTotal
+        FLOAT principalScoreTotal
+        VARCHAR status
+        JSONB evaluationData
+        TEXT selfComment
+        VARCHAR selfRating
+        TEXT managerComment
+        VARCHAR managerRating
         TIMESTAMP createdAt
         TIMESTAMP updatedAt
     }
@@ -287,8 +307,10 @@ erDiagram
 
     evaluation_cycles ||--o{ objectives : "belongs to"
     evaluation_cycles ||--o{ user_okrs : "evaluated in"
+    evaluation_cycles ||--o{ user_evaluations : "contains evaluations"
 
     users ||--o{ user_okrs : "assigned"
+    users ||--o{ user_evaluations : "has evaluations"
     okr_templates ||--o{ user_okrs : "based on"
 
     users ||--o{ notifications : "receives"
@@ -315,7 +337,8 @@ erDiagram
         <h3><span class="badge badge-perf">PERFORMANCE</span> Đánh giá & Mẫu OKR</h3>
         <p><b>evaluation_cycles</b> — Kỳ đánh giá (Học kỳ 1, 2…)<br>
         <b>okr_templates</b> — Mẫu OKR do quản lý tạo<br>
-        <b>user_okrs</b> — OKR được gán cho từng người dùng</p>
+        <b>user_okrs</b> — OKR được gán cho từng người dùng<br>
+        <b>user_evaluations</b> — Bản tự đánh giá và đánh giá của giảng viên</p>
     </div>
     <div class="legend-card">
         <h3><span class="badge badge-sys">SYSTEM</span> Hệ thống & Logs</h3>
@@ -324,7 +347,7 @@ erDiagram
     </div>
 </div>
 
-<footer>OKR Management System — ERD generated from TypeORM entities — 2026-03-21</footer>
+<footer>OKR Management System — ERD generated from TypeORM entities — 2026-06-03</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>
