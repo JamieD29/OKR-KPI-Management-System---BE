@@ -1,19 +1,19 @@
 -- ============================================================
--- MIGRATION SCRIPT: Chuyển đổi Role cũ → ADMIN + USER
+-- MIGRATION SCRIPT: Convert legacy Roles → ADMIN + USER
 -- ============================================================
--- Xem MIGRATION_GUIDE.md để biết hướng dẫn chi tiết
--- QUAN TRỌNG: Tắt backend trước khi chạy, chạy TỪNG PHẦN
+-- Refer to MIGRATION_GUIDE.md for detailed instructions
+-- IMPORTANT: Stop backend server before running, execute SECTION BY SECTION
 -- ============================================================
 
--- ===== PHẦN A: Tạo role ADMIN mới (nếu chưa có) =====
+-- ===== SECTION A: Create new ADMIN role (if it does not exist) =====
 INSERT INTO roles (id, name, slug, description)
 VALUES (uuid_generate_v4(), 'Admin', 'ADMIN', 'Quản trị viên hệ thống')
 ON CONFLICT (slug) DO NOTHING;
 
--- Kiểm tra: SELECT * FROM roles WHERE slug = 'ADMIN';
+-- Verification: SELECT * FROM roles WHERE slug = 'ADMIN';
 
 
--- ===== PHẦN B: Gán ADMIN cho user đang giữ role quản trị cũ =====
+-- ===== SECTION B: Assign ADMIN role to users holding legacy administrative roles =====
 INSERT INTO user_roles (user_id, role_id)
 SELECT ur.user_id, (SELECT id FROM roles WHERE slug = 'ADMIN')
 FROM user_roles ur
@@ -24,17 +24,17 @@ WHERE r.slug IN (
 )
 ON CONFLICT DO NOTHING;
 
--- Kiểm tra: SELECT u.email FROM user_roles ur JOIN users u ON ur.user_id = u.id JOIN roles r ON ur.role_id = r.id WHERE r.slug = 'ADMIN';
+-- Verification: SELECT u.email FROM user_roles ur JOIN users u ON ur.user_id = u.id JOIN roles r ON ur.role_id = r.id WHERE r.slug = 'ADMIN';
 
 
 
--- Nếu slug 'USER' chưa tồn tại → rename LECTURER/user thành USER
+-- If 'USER' slug does not exist -> rename LECTURER/user to USER
 UPDATE roles
 SET slug = 'USER', name = 'User'
 WHERE slug IN ('LECTURER', 'user')
   AND NOT EXISTS (SELECT 1 FROM roles WHERE slug = 'USER');
 
--- Nếu slug 'USER' đã tồn tại → chuyển user_roles sang role USER rồi xóa role cũ
+-- If 'USER' slug already exists -> map user_roles to USER and clean up legacy roles
 INSERT INTO user_roles (user_id, role_id)
 SELECT ur.user_id, (SELECT id FROM roles WHERE slug = 'USER')
 FROM user_roles ur
@@ -51,11 +51,11 @@ DELETE FROM roles
 WHERE slug IN ('LECTURER', 'user')
   AND EXISTS (SELECT 1 FROM roles WHERE slug = 'USER');
 
--- Kiểm tra: SELECT * FROM roles WHERE slug = 'USER';
+-- Verification: SELECT * FROM roles WHERE slug = 'USER';
 
 
 
--- Xóa liên kết trong user_roles
+-- Clean up user associations for legacy roles in user_roles
 DELETE FROM user_roles
 WHERE role_id IN (
     SELECT id FROM roles
@@ -65,7 +65,7 @@ WHERE role_id IN (
     )
 );
 
---  Xóa role cũ
+-- Delete legacy roles
 DELETE FROM roles
 WHERE slug IN (
     'SUPER_ADMIN', 'SYSTEM_ADMIN', 'DEAN', 'HEAD_OF_DEPARTMENT',

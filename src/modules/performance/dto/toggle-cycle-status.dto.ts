@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum } from 'class-validator';
-import { EvaluationStatus } from '../../../database/entities/performance/evaluation-cycle.entity';
+import { EvaluationStatus } from '../../../database/entities/performance-evaluation/evaluation-cycle.entity';
 
 export class ToggleCycleStatusDto {
   @ApiProperty({

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString, IsBoolean } from 'class-validator';
-import { CycleType } from '../../../database/entities/performance/evaluation-cycle.entity';
+import { CycleType } from '../../../database/entities/performance-evaluation/evaluation-cycle.entity';
 
 export class CreateCycleDto {
   @ApiProperty({ example: 'Học kỳ 1 - 2025-2026' })

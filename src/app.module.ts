@@ -12,14 +12,13 @@ import { AllowedDomain } from './database/entities/allowed-domain.entity';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DepartmentsModule } from './modules/departments/departments.module';
-// 👇 Import các Entity liên quan đến Performance (KPI đã loại bỏ)
-import { EvaluationCycle } from './database/entities/performance/evaluation-cycle.entity';
-import { UserOkr } from './database/entities/performance/user-okr.entity';
-import { OkrTemplate } from './database/entities/performance/okr-template.entity';
-import { PerformanceModule } from './modules/performance/performance.module'; // 👈 Import
-//import Sytemlog
+// 👇 Import entities related to Performance & OKRs
+import { EvaluationCycle } from './database/entities/performance-evaluation/evaluation-cycle.entity';
+import { UserOkr } from './database/entities/performance-evaluation/user-okr.entity';
+import { OkrTemplate } from './database/entities/performance-evaluation/okr-template.entity';
+import { PerformanceModule } from './modules/performance/performance.module';
 import { SystemLogsModule } from './modules/system-logs/system-logs.module';
-import { OkrModule } from './modules/okr/okr.module'; // 👈 Import nó vào
+import { OkrModule } from './modules/okr/okr.module';
 import { OkrTemplateModule } from './modules/okr-template/okr-template.module';
 // 👇 Import Database Seeder Module
 import { DatabaseSeederModule } from './database/database-seeder.module';
@@ -31,7 +30,7 @@ import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // Load file .env
+    ConfigModule.forRoot({ isGlobal: true }), // Load environment configuration
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
@@ -47,9 +46,9 @@ import { NotificationModule } from './modules/notification/notification.module';
         ManagementPosition,
         Notification,
       ],
-      synchronize: true, // LƯU Ý: Dev để true để nó tự tạo bảng, lên Prod phải tắt!
+      synchronize: true, // NOTE: Set to true in development for auto-schema generation, disable in production
     }),
-    // 👇 Đăng ký Database Seeder Module
+    // 👇 Register Database Seeder Module
     DatabaseSeederModule,
     AuthModule,
     AdminModule,
@@ -57,7 +56,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     DepartmentsModule,
     PerformanceModule,
     SystemLogsModule,
-    OkrModule, // 👈 Đăng ký module Performance
+    OkrModule,
     OkrTemplateModule,
     ManagementPositionModule,
     NotificationModule,

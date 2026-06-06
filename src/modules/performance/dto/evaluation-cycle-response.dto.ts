@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   EvaluationStatus,
   CycleType,
-} from '../../../database/entities/performance/evaluation-cycle.entity';
+} from '../../../database/entities/performance-evaluation/evaluation-cycle.entity';
 
 /** Bản ghi EvaluationCycle trả về API. */
 export class EvaluationCycleSwaggerDto {

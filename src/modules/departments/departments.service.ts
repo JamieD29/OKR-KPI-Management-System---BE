@@ -5,11 +5,19 @@ import { Department } from '../../database/entities/department.entity';
 import { User } from '../../database/entities/user.entity';
 import { CreateDepartmentDto } from './dto/create-department.dto';
 import { UpdateDepartmentDto } from './dto/update-department.dto';
+import { SystemLogsService } from '../system-logs/system-logs.service'; // Import system logging service
 
-import { SystemLogsService } from '../system-logs/system-logs.service'; // Import service
-
+/**
+ * Service handling department operations, including department creation, 
+ * retrieval, updating, deletion, and scoping list results by user permissions.
+ */
 @Injectable()
 export class DepartmentsService {
+  /**
+   * @param departmentRepository Repository for Department entity
+   * @param userRepository Repository for User entity
+   * @param systemLogsService Service to record audit logs
+   */
   constructor(
     @InjectRepository(Department)
     private departmentRepository: Repository<Department>,
@@ -20,6 +28,14 @@ export class DepartmentsService {
     private systemLogsService: SystemLogsService,
   ) {}
 
+  /**
+   * Creates a new department and records a log.
+   * 
+   * @param createDepartmentDto Details of the department to create
+   * @param currentUser The user initiating the creation
+   * @returns The saved Department entity
+   * @throws {ConflictException} If a department with the same name already exists
+   */
   async create(createDepartmentDto: CreateDepartmentDto, currentUser: User) {
     const existing = await this.departmentRepository.findOne({
       where: { name: createDepartmentDto.name },
@@ -27,10 +43,10 @@ export class DepartmentsService {
     if (existing) throw new ConflictException('Tên bộ môn đã tồn tại');
 
     const dept = this.departmentRepository.create(createDepartmentDto);
-    // Lưu vào biến trước thay vì return luôn
+    // Save to variable to preserve for logs before returning
     const savedDept = await this.departmentRepository.save(dept);
 
-    // 👇 GỌI HÀM GHI LOG Ở ĐÂY
+    // 👇 Write audit log for the creation
     if (this.systemLogsService) {
       await this.systemLogsService.createLog({
         userId: currentUser?.id,
@@ -44,6 +60,14 @@ export class DepartmentsService {
     return savedDept;
   }
 
+  /**
+   * Retrieves departments based on user permissions.
+   * Admins see all departments. Users with division-level permission ('DON_VI') 
+   * see only their own department. Others see all departments.
+   * 
+   * @param currentUser The user making the request
+   * @returns Array of departments with their member counts
+   */
   async findAll(currentUser?: any) {
     const userRoles = currentUser?.roles || [];
     let isAdmin = userRoles.some((role: any) => {
@@ -88,6 +112,12 @@ export class DepartmentsService {
     return this.getAllDepartments();
   }
 
+  /**
+   * Internal helper to retrieve all departments ordered alphabetically,
+   * including their member counts, while omitting raw user records.
+   * 
+   * @returns List of all departments with `memberCount`
+   */
   private getAllDepartments() {
     return this.departmentRepository
       .find({
@@ -103,15 +133,24 @@ export class DepartmentsService {
       );
   }
 
-  // 👇 Đã check lại logic update cho mày
+  /**
+   * Updates an existing department's details and logs the changes.
+   * 
+   * @param id The ID of the department to update
+   * @param updateDepartmentDto The partial department details to apply
+   * @param currentUser The user initiating the update
+   * @returns The updated Department entity
+   * @throws {NotFoundException} If the department is not found
+   * @throws {ConflictException} If the new code is already taken by another department
+   */
   async update(id: string, updateDepartmentDto: UpdateDepartmentDto, currentUser: any) {
-    // 1. Check xem bộ môn có tồn tại không
+    // 1. Verify department exists
     const department = await this.departmentRepository.findOne({ where: { id } });
     if (!department) {
       throw new NotFoundException('Không tìm thấy bộ môn');
     }
 
-    // phải check trùng code với thằng khác
+    // Verify code uniqueness if code is updated
     if (updateDepartmentDto.code && updateDepartmentDto.code !== department.code) {
       const duplicate = await this.departmentRepository.findOne({
         where: {
@@ -126,38 +165,46 @@ export class DepartmentsService {
     }
 
     const oldData = { ...department };
-    // 3. Update an toàn
-    // Object.assign là OK, hoặc dùng this.departmentRepository.save({ ...department, ...dto })
+    // 3. Perform a safe update
+    // Safely assign properties and save
     Object.assign(department, updateDepartmentDto);
     const updatedDept = await this.departmentRepository.save(department);
     if (this.systemLogsService) {
       await this.systemLogsService.createLog({
         userId: currentUser?.id,
-        action: 'UPDATE', // Hành động: UPDATE
+        action: 'UPDATE', // Action: UPDATE
         resource: 'DEPARTMENT',
         message: `Cập nhật thông tin bộ môn: ${updatedDept.code}`,
-        details: { old: oldData, new: updatedDept }, // 👈 Rất quan trọng
+        details: { old: oldData, new: updatedDept }, // 👈 Record old and new states for auditing
       });
     }
 
     return updatedDept;
   }
 
+  /**
+   * Deletes a department, unlinks its members, and logs the deletion.
+   * 
+   * @param id The ID of the department to delete
+   * @param currentUser The user initiating the deletion
+   * @returns The deleted Department entity
+   * @throws {NotFoundException} If the department is not found
+   */
   async remove(id: string, currentUser: any) {
     const dept = await this.departmentRepository.findOne({ where: { id } });
     if (!dept) throw new NotFoundException('Không tìm thấy bộ môn');
     const deletedData = { ...dept };
-    // Reset user về null trước khi xóa bộ môn
+    // Dissociate users from department before deletion to prevent constraint violations
     await this.userRepository.update({ department: { id } }, { department: null as any });
     const result = await this.departmentRepository.remove(dept);
 
     if (this.systemLogsService) {
       await this.systemLogsService.createLog({
         userId: currentUser?.id,
-        action: 'DELETE', // Hành động: DELETE (Màu đỏ trên UI)
+        action: 'DELETE', // Action: DELETE
         resource: 'DEPARTMENT',
         message: `Đã xóa bộ môn: ${deletedData.name} (${deletedData.code})`,
-        details: { deleted: deletedData }, // Lưu lại để sau này biết đã xóa cái gì
+        details: { deleted: deletedData }, // Store deleted snapshot for auditing history
       });
     }
     return result;

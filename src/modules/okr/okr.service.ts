@@ -6,16 +6,27 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Objective } from '../../database/entities/objective.entity';
-import { UserOkr } from '../../database/entities/performance/user-okr.entity';
-import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
-import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance/evaluation-cycle.entity';
+import { Objective } from '../../database/entities/performance-evaluation/objective.entity';
+import { UserOkr } from '../../database/entities/performance-evaluation/user-okr.entity';
+import { UserEvaluation } from '../../database/entities/performance-evaluation/user-evaluation.entity';
+import { EvaluationCycle, EvaluationStatus } from '../../database/entities/performance-evaluation/evaluation-cycle.entity';
 import { NotificationService } from '../notification/notification.service';
 import { User } from '../../database/entities/user.entity';
 import { Department } from '../../database/entities/department.entity';
 
+/**
+ * Service managing Objective and Key Results (OKR) and Performance Evaluations.
+ * Handles workflows for negotiation, self-reporting, manager review, auto-acceptance, 
+ * auto-submission, and department/dean dashboard metrics.
+ */
 @Injectable()
 export class OkrService {
+  /**
+   * @param objectiveRepo Repository for Objective entity
+   * @param userOkrRepo Repository for UserOkr entity
+   * @param userEvaluationRepo Repository for UserEvaluation entity
+   * @param notificationService Service to create and dispatch notifications
+   */
   constructor(
     @InjectRepository(Objective)
     private objectiveRepo: Repository<Objective>,
@@ -26,6 +37,14 @@ export class OkrService {
     private notificationService: NotificationService,
   ) {}
 
+  /**
+   * Internal helper to determine if the user has restricted access to a department.
+   * If the user is an Admin, they have unrestricted access.
+   * If the user is a division head ('DON_VI'), access is restricted to their own department.
+   * 
+   * @param userId The ID of the requesting user
+   * @returns The restricted department ID or null if unrestricted
+   */
   private async getRestrictDeptId(userId?: string): Promise<string | null> {
     if (!userId) return null;
     const user = await this.userOkrRepo.manager.getRepository(User).findOne({
@@ -45,7 +64,13 @@ export class OkrService {
     return null;
   }
 
-  // Hàm LƯU OKR MỚI (Department objectives - legacy)
+  /**
+   * Creates a new department-level objective (Legacy).
+   * 
+   * @param data Department objective payload
+   * @returns Saved Objective entity
+   * @throws {InternalServerErrorException} If DB save fails
+   */
   async createDepartmentOkr(data: any) {
     try {
       const newObjective = this.objectiveRepo.create({
@@ -63,6 +88,11 @@ export class OkrService {
     }
   }
 
+  /**
+   * Retrieves all legacy department-level objectives.
+   * 
+   * @returns Array of department objectives
+   */
   async getDepartmentOkrs() {
     return this.objectiveRepo.find({
       where: { type: 'DEPARTMENT' },
@@ -72,6 +102,18 @@ export class OkrService {
   }
 
   // --- DEPARTMENT OVERVIEW ---
+
+  /**
+   * Compiles department overview statistics and user-level OKR/Evaluation statuses.
+   * Enforces department-level boundaries for non-admin requests.
+   * 
+   * @param deptId Target department ID
+   * @param userId Requesting user ID for RBAC validation
+   * @param cycleId Evaluation cycle filter
+   * @returns Aggregated department metrics, members list, and status tables
+   * @throws {BadRequestException} If the user lacks access to the requested department
+   * @throws {NotFoundException} If the department does not exist
+   */
   async getDepartmentOverview(deptId: string, userId: string, cycleId?: string) {
     // 1. RBAC Check
     const restrictDeptId = await this.getRestrictDeptId(userId);
@@ -79,7 +121,7 @@ export class OkrService {
       throw new BadRequestException('Bạn không có quyền xem tổng quan của bộ môn này');
     }
 
-    // 2. Lấy thông tin Department
+    // 2. Retrieve Department details
     const departmentRepo = this.userOkrRepo.manager.getRepository(Department);
     const department = await departmentRepo.findOne({
       where: { id: deptId },
@@ -90,7 +132,7 @@ export class OkrService {
       throw new NotFoundException('Không tìm thấy bộ môn');
     }
 
-    // 3. Lấy Department Objectives
+    // 3. Retrieve Department Objectives
     const whereCondition: any = { departmentId: deptId, type: 'DEPARTMENT' };
     if (cycleId) {
       whereCondition.cycleId = cycleId;
@@ -101,7 +143,7 @@ export class OkrService {
       order: { createdAt: 'DESC' },
     });
 
-    // 4. Lấy danh sách thành viên và OKR chi tiết
+    // 4. Retrieve list of members and detailed OKR data
     const memberIds = department.users ? department.users.map(u => u.id) : [];
 
     let actionRequiredCount = 0;
@@ -221,10 +263,12 @@ export class OkrService {
   // --- LAZY DEADLINE EVALUATION ---
 
   /**
-   * Kiểm tra deadline và tự động chốt OKR quá hạn.
-   * Logic: Nếu deadline < now VÀ status = PENDING|NEGOTIATING
-   * → Auto chuyển sang ACCEPTED (lấy phiên bản keyResults mới nhất trong DB)
-   * → Gửi notification cho user
+   * Checks deadlines and automatically locks/accepts expired OKRs.
+   * If deadline < now and status is PENDING or NEGOTIATING, the status
+   * changes to ACCEPTED and user is notified.
+   * 
+   * @param okrs UserOkr array to process
+   * @returns Processed UserOkr array
    */
   private async checkAndAutoAcceptExpired(okrs: UserOkr[]): Promise<UserOkr[]> {
     const now = new Date();
@@ -238,10 +282,9 @@ export class OkrService {
       ) {
         okr.status = 'ACCEPTED';
         okr.acceptedAt = now;
-        // keyResults giữ nguyên phiên bản mới nhất đang có trong DB
         await this.userOkrRepo.save(okr);
 
-        // Gửi thông báo cho user
+        // Notify user of auto-acceptance
         await this.notificationService.create(
           okr.userId,
           `⏰ OKR "${okr.objective}" đã được tự động chốt do hết hạn đàm phán (${new Date(okr.deadline).toLocaleDateString('vi-VN')}). Phiên bản mới nhất đã được áp dụng.`,
@@ -258,17 +301,21 @@ export class OkrService {
     return okrs;
   }
 
-  /** Check nếu OKR đã quá deadline đàm phán */
+  /**
+   * Checks if the negotiation deadline for a given OKR has expired.
+   * 
+   * @param okr UserOkr entity
+   * @returns True if current time is past negotiation deadline
+   */
   private isDeadlineExpired(okr: UserOkr): boolean {
     if (!okr.deadline) return false;
     return new Date(okr.deadline) < new Date();
   }
 
   /**
-   * Tự động nộp bài tự khai OKR và phiếu tự đánh giá khi kỳ đánh giá đã kết thúc hoặc đóng lại.
-   * Logic: Nếu kỳ đánh giá đã đóng (CLOSED) hoặc qua ngày kết thúc (endDate < now)
-   * -> Auto chuyển OKR từ ACCEPTED sang SUBMITTED
-   * -> Auto chuyển UserEvaluation từ PENDING_EVALUATION sang SUBMITTED
+   * Auto-submits unsubmitted OKR self-reports and quality evaluations when a cycle ends/closes.
+   * Converts ACCEPTED OKRs to SUBMITTED and calculates scores.
+   * Converts PENDING_EVALUATION sheets to SUBMITTED.
    */
   private async checkAndAutoSubmitAllExpiredReports(): Promise<void> {
     try {
@@ -283,7 +330,7 @@ export class OkrService {
 
       if (closedCycleIds.length === 0) return;
 
-      // 1. Tự động nộp các bản OKR đã ACCEPTED của tất cả các user thuộc các kỳ đã quá hạn/đóng
+      // 1. Auto-submit ACCEPTED OKRs for users in expired/closed cycles
       const okrs = await this.userOkrRepo.find({
         where: {
           cycleId: In(closedCycleIds),
@@ -303,7 +350,7 @@ export class OkrService {
         );
       }
 
-      // 2. Tự động nộp các Phiếu Đánh Giá đang ở trạng thái PENDING_EVALUATION của các kỳ đã quá hạn/đóng
+      // 2. Auto-submit quality evaluation forms in PENDING_EVALUATION state
       const evs = await this.userEvaluationRepo.find({
         where: {
           cycleId: In(closedCycleIds),
@@ -329,8 +376,15 @@ export class OkrService {
 
   // --- OKR NEGOTIATION + SELF-REPORT WORKFLOW ---
 
+  /**
+   * Retrieves OKRs belonging to the requesting user.
+   * Performs housekeeping (auto-submits expired cycles, auto-accepts expired negotiations).
+   * 
+   * @param userId User ID
+   * @returns Array of processed UserOkr records
+   */
   async getMyOkrs(userId: string) {
-    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    // Auto-submit expired reviews if cycle is closed or past its end date
     await this.checkAndAutoSubmitAllExpiredReports();
 
     const okrs = await this.userOkrRepo.find({
@@ -339,10 +393,16 @@ export class OkrService {
       order: { createdAt: 'DESC' },
     });
 
-    // Lazy check: auto-accept nếu quá deadline
+    // Lazy check: auto-accept if negotiation deadline is expired
     return this.checkAndAutoAcceptExpired(okrs);
   }
 
+  /**
+   * Lists user IDs assigned to a specific cycle.
+   * 
+   * @param cycleId Evaluation cycle ID
+   * @returns Array of user IDs
+   */
   async getAssignedUsersInCycle(cycleId: string): Promise<string[]> {
     const okrs = await this.userOkrRepo.find({
       where: { cycleId },
@@ -351,6 +411,13 @@ export class OkrService {
     return okrs.map(o => o.userId);
   }
 
+  /**
+   * Retrieves pending OKR negotiation requests.
+   * Non-admin roles are restricted to their own department.
+   * 
+   * @param requesterId The user fetching pending requests
+   * @returns Array of pending UserOkr records
+   */
   async getPendingApproval(requesterId?: string) {
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
 
@@ -363,7 +430,7 @@ export class OkrService {
       order: { createdAt: 'DESC' },
     });
 
-    // Lazy check: auto-accept expired, rồi lọc chỉ trả về cái còn đang đàm phán
+    // Lazy check: auto-accept expired, then filter to return active negotiations
     await this.checkAndAutoAcceptExpired(okrs);
 
     let filtered = okrs.filter(o => o.status === 'NEGOTIATING' || o.status === 'PENDING');
@@ -373,6 +440,15 @@ export class OkrService {
     return filtered;
   }
 
+  /**
+   * Marks an OKR template as accepted by the user, initiating negotiation.
+   * Sets status to NEGOTIATING and alerts relevant administrators.
+   * 
+   * @param id UserOkr ID
+   * @param userId The accepting user's ID
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   */
   async acceptOkr(id: string, userId: string) {
     const okr = await this.userOkrRepo.findOne({ 
       where: { id, userId },
@@ -380,12 +456,12 @@ export class OkrService {
     });
     if (!okr) throw new NotFoundException('OKR not found');
     
-    // Đổi trạng thái thành NEGOTIATING để chờ quản lý duyệt chốt OKR
+    // Change status to NEGOTIATING to await manager approval
     okr.status = 'NEGOTIATING';
     
     const saved = await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa/Trưởng bộ môn
+    // Send notifications to Admin and Dean/Vice Dean/Department Head
     try {
       const managers = await this.userOkrRepo.manager.getRepository(User).find({
         relations: ['roles', 'managementPosition'],
@@ -415,6 +491,15 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * Submits the OKR template or adjustments for manager review.
+   * 
+   * @param id UserOkr ID
+   * @param userId Requesting user ID
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If negotiation deadline is expired or state is invalid
+   */
   async sendForApproval(id: string, userId: string) {
     const okr = await this.userOkrRepo.findOne({ 
       where: { id, userId },
@@ -435,7 +520,7 @@ export class OkrService {
     okr.status = 'NEGOTIATING';
     const saved = await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa
+    // Send notifications to Admin and Dean/Vice Dean
     try {
       const managers = await this.userOkrRepo.manager.getRepository(User).find({
         relations: ['roles', 'managementPosition'],
@@ -465,6 +550,17 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * Adds a comment to a specific Key Result item during negotiation.
+   * 
+   * @param id UserOkr ID
+   * @param itemId Targeted Key Result item ID
+   * @param sender The sender identity ('USER' or 'MANAGER')
+   * @param message Comment message
+   * @returns Saved UserOkr record with updated proposed changes
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If a user attempts to comment after deadline
+   */
   async chatItem(id: string, itemId: string, sender: 'USER' | 'MANAGER', message: string) {
     const okr = await this.userOkrRepo.findOne({ 
       where: { id },
@@ -472,7 +568,7 @@ export class OkrService {
     });
     if (!okr) throw new NotFoundException('OKR not found');
 
-    // Chặn đàm phán nếu đã quá deadline (chỉ chặn user, manager vẫn có thể)
+    // Block negotiation if deadline is expired (restricted for user, allowed for manager)
     if (sender === 'USER' && this.isDeadlineExpired(okr)) {
       throw new BadRequestException(
         `Đã hết hạn đàm phán (${new Date(okr.deadline!).toLocaleDateString('vi-VN')}). Không thể gửi đề xuất mới.`,
@@ -492,12 +588,10 @@ export class OkrService {
 
     okr.proposedChanges = changes;
     
-    // Không tự động đổi status khi gửi comment.
-    // Status chỉ thay đổi khi user bấm "Gửi thay đổi & Yêu cầu duyệt" hoặc "Gửi yêu cầu duyệt đề xuất".
-
+    // Status only updates when the user clicks submit modifications/review.
     const saved = await this.userOkrRepo.save(okr);
 
-    // Nếu manager gửi phản hồi đàm phán (chat comment), gửi thông báo cho user
+    // If manager replies in negotiation (chat comment), notify the user
     if (sender === 'MANAGER') {
       try {
         const messageStr = `💬 Người giao OKR đã phản hồi yêu cầu đề xuất điều chỉnh OKR "${okr.objective}" của bạn.`;
@@ -507,7 +601,7 @@ export class OkrService {
       }
     }
 
-    // Nếu user gửi phản hồi đàm phán (chat comment), gửi thông báo cho manager
+    // If user replies in negotiation (chat comment), notify the manager
     if (sender === 'USER') {
       try {
         const managers = await this.userOkrRepo.manager.getRepository(User).find({
@@ -539,6 +633,16 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * Modifies structural weights (maxScore, unitScore) of an OKR item recursively.
+   * Deep-clones the original structure prior to editing.
+   * 
+   * @param id UserOkr ID
+   * @param itemId Target item ID
+   * @param updates Object containing updates for maxScore or unitScore
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If OKR is not found
+   */
   async updateItemProperties(id: string, itemId: string, updates: any) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -561,20 +665,30 @@ export class OkrService {
     if (okr.keyResults) {
       const changes = okr.proposedChanges || {};
       if (!changes.originalStructure) {
-        // Clone sâu keyResults trước khi sửa
+        // Deep clone keyResults before editing
         changes.originalStructure = JSON.parse(JSON.stringify(okr.keyResults));
       }
 
       updateRecursive(okr.keyResults);
       okr.proposedChanges = changes;
-      // Recalculate if necessary, but maxScore is just a structural thing
-      // until self-report happens.
     }
 
     await this.userOkrRepo.save(okr);
     return okr;
   }
 
+  /**
+   * Updates the overall OKR Key Result structure as proposed by the user.
+   * Safely backs up the original structure before overwrite.
+   * 
+   * @param id UserOkr ID
+   * @param userId Requesting user ID
+   * @param keyResults Proposed structural array
+   * @param localComments Local comments history mapping
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If past deadline or state is not under negotiation
+   */
   async updateOkrStructure(id: string, userId: string, keyResults: any[], localComments?: Record<string, any[]>) {
     const okr = await this.userOkrRepo.findOne({ 
       where: { id, userId },
@@ -586,14 +700,14 @@ export class OkrService {
       throw new BadRequestException('Chỉ có thể thay đổi cấu trúc khi đang đàm phán.');
     }
 
-    // Chặn thay đổi cấu trúc nếu đã quá deadline
+    // Block structure changes if negotiation deadline has expired
     if (this.isDeadlineExpired(okr)) {
       throw new BadRequestException(
         `Đã hết hạn đàm phán (${new Date(okr.deadline!).toLocaleDateString('vi-VN')}). Không thể thay đổi cấu trúc OKR.`,
       );
     }
 
-    // Sao lưu cấu trúc cũ trước khi bị ghi đè, nếu chưa sao lưu
+    // Backup original structure before overwrite, if not already backed up
     const changes = okr.proposedChanges || {};
     if (!changes.originalStructure) {
       changes.originalStructure = JSON.parse(JSON.stringify(okr.keyResults));
@@ -613,7 +727,7 @@ export class OkrService {
     
     const saved = await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho Admin và Trưởng khoa/Phó khoa khi gửi đề xuất điều chỉnh OKR
+    // Send notifications to Admin and Dean/Vice Dean when submitting adjustment proposal
     try {
       const managers = await this.userOkrRepo.manager.getRepository(User).find({
         relations: ['roles', 'managementPosition'],
@@ -643,6 +757,19 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * Updates the OKR Key Result structure as proposed by the manager.
+   * Reverts status to PENDING for the user to confirm/accept.
+   * 
+   * @param id UserOkr ID
+   * @param managerId Assigner manager's ID
+   * @param keyResults Updated structure
+   * @param localComments Local comments mapping
+   * @param originalStructure Original structure backup override
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If not in negotiation phase
+   */
   async managerUpdateOkrStructure(
     id: string, 
     managerId: string, 
@@ -674,11 +801,11 @@ export class OkrService {
 
     okr.keyResults = keyResults;
     okr.proposedChanges = changes;
-    okr.status = 'PENDING'; // Manager đã phản hồi, chờ user xác nhận
+    okr.status = 'PENDING'; // Awaiting user confirmation
 
     const saved = await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho nhân sự là người giao OKR đã phản hồi đề xuất
+    // Send notification to user that the OKR assigner has replied to the proposal
     try {
       const message = `💬 Người giao OKR đã phản hồi yêu cầu đề xuất điều chỉnh OKR "${okr.objective}" của bạn.`;
       await this.notificationService.create(okr.userId, message);
@@ -689,8 +816,17 @@ export class OkrService {
     return saved;
   }
 
-  // --- GIA HẠN DEADLINE (Dành cho Trưởng khoa) ---
+  // --- EXTEND DEADLINE (For Dean) ---
 
+  /**
+   * Extends the negotiation deadline for an OKR.
+   * 
+   * @param id UserOkr ID
+   * @param newDeadline Target extension date
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If the OKR has already been accepted or finalized
+   */
   async extendDeadline(id: string, newDeadline: Date) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -706,7 +842,7 @@ export class OkrService {
     okr.deadline = newDeadline;
     await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho user
+    // Send notification to user
     await this.notificationService.create(
       okr.userId,
       `📅 Deadline đàm phán OKR "${okr.objective}" đã được gia hạn: ${oldDeadline} → ${new Date(newDeadline).toLocaleDateString('vi-VN')}.`,
@@ -715,6 +851,14 @@ export class OkrService {
     return okr;
   }
 
+  /**
+   * Approves and locks the current OKR structure.
+   * Reverts status to ACCEPTED.
+   * 
+   * @param id UserOkr ID
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   */
   async approveOkr(id: string) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -722,10 +866,9 @@ export class OkrService {
     okr.status = 'ACCEPTED';
     okr.acceptedAt = new Date();
     
-    // Xóa bản sao lưu gốc vì đã chấp nhận bản mới
+    // Remove original backup since the new structure is approved
     if (okr.proposedChanges && okr.proposedChanges.originalStructure) {
       delete okr.proposedChanges.originalStructure;
-      // KHÔNG gán proposedChanges = null để giữ lại lịch sử comment
     }
 
     await this.userOkrRepo.save(okr);
@@ -736,19 +879,26 @@ export class OkrService {
     return okr;
   }
 
+  /**
+   * Rejects the proposed OKR modifications and restores the previous structure.
+   * Sets status back to PENDING.
+   * 
+   * @param id UserOkr ID
+   * @param reason Rejection message reason
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   */
   async rejectOkr(id: string, reason: string) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
 
     okr.status = 'PENDING';
     
-    // Phục hồi lại bản gốc nếu có sao lưu
+    // Restore the original version if a backup exists
     if (okr.proposedChanges && okr.proposedChanges.originalStructure) {
       okr.keyResults = okr.proposedChanges.originalStructure;
       delete okr.proposedChanges.originalStructure;
     }
-
-    // KHÔNG gán proposedChanges = null để giữ lại lịch sử comment làm minh chứng
 
     await this.userOkrRepo.save(okr);
     await this.notificationService.create(
@@ -758,8 +908,18 @@ export class OkrService {
     return okr;
   }
 
-  // --- SELF-REPORT: User tự khai điểm ---
+  // --- SELF-REPORT: User self-reports score ---
 
+  /**
+   * Computes the aggregated score of an OKR template according to weight structures and quantities.
+   * Caps objective and sub-level scores by their designated maxScores.
+   * 
+   * Supports structural levels up to Level 4 (Sub-Sub-KR).
+   * 
+   * @param structure OKR Key Result structure array
+   * @param reportData Self-reported quantity values mapping
+   * @returns Aggregated score points sum
+   */
   private calculateOkrScore(structure: any[], reportData: any): number {
     if (!structure || !Array.isArray(structure)) return 0;
     if (!reportData || typeof reportData !== 'object') return 0;
@@ -792,7 +952,7 @@ export class OkrService {
                const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
                objRawScore += subCappedScore;
 
-               // Bổ sung tính điểm cho Sub-Sub-KR (Cấp 4)
+               // Incorporate scoring for Sub-Sub-KR (Level 4)
                if (sub.items && Array.isArray(sub.items)) {
                  for (const subsub of sub.items) {
                    const subsubKey = `${obj.id}-${kr.id}-${sub.id}-${subsub.id}`;
@@ -816,7 +976,13 @@ export class OkrService {
     return grandTotal;
   }
 
-  // Tách hàm tính điểm từng Objective để dùng cho Phiếu đánh giá
+  /**
+   * Extract function to calculate score of a single Objective for use in Evaluation Form.
+   * 
+   * @param obj Single objective structure item
+   * @param reportData Quantity reports mapping
+   * @returns Calculated score capped at objective's max score
+   */
   private calcSingleObjectiveScore(obj: any, reportData: any): number {
     let objRawScore = 0;
     const maxObjScore = Number(obj.maxScore) || 0;
@@ -843,7 +1009,7 @@ export class OkrService {
              const subCappedScore = Math.min(subCalcScore, Number(sub.maxScore) || Infinity);
              objRawScore += subCappedScore;
 
-             // Bổ sung tính điểm cho Sub-Sub-KR (Cấp 4)
+             // Incorporate scoring for Sub-Sub-KR (Level 4)
              if (sub.items && Array.isArray(sub.items)) {
                for (const subsub of sub.items) {
                  const subsubKey = `${obj.id}-${kr.id}-${sub.id}-${subsub.id}`;
@@ -863,6 +1029,17 @@ export class OkrService {
     return maxObjScore > 0 ? Math.min(objRawScore, maxObjScore) : objRawScore;
   }
 
+  /**
+   * User submits their final self-report.
+   * Computes user's self score, saves report, and flags status to SUBMITTED.
+   * 
+   * @param id UserOkr ID
+   * @param userId Submitting user ID
+   * @param selfReportData Quantification data mapping
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If the OKR structure was never accepted/locked
+   */
   async submitSelfReport(id: string, userId: string, selfReportData: any) {
     const okr = await this.userOkrRepo.findOne({ 
       where: { id, userId },
@@ -880,7 +1057,7 @@ export class OkrService {
 
     const saved = await this.userOkrRepo.save(okr);
 
-    // Gửi thông báo cho các quản lý/admin khi nộp tự khai điểm!
+    // Send notification to managers/admins when self-report is submitted
     try {
       const managers = await this.userOkrRepo.manager.getRepository(User).find({
         relations: ['roles', 'managementPosition'],
@@ -910,6 +1087,17 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * User saves a draft of their self-report.
+   * Calculates score so the UI can show updated points immediately without submitting.
+   * 
+   * @param id UserOkr ID
+   * @param userId Requesting user ID
+   * @param selfReportData Valuation payload
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   * @throws {BadRequestException} If the OKR has not been accepted
+   */
   async draftSelfReport(id: string, userId: string, selfReportData: any) {
     const okr = await this.userOkrRepo.findOne({ where: { id, userId } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -918,17 +1106,24 @@ export class OkrService {
     }
 
     okr.selfReportData = selfReportData;
-    // Calculate score so the UI can show updated points immediately without submitting
     okr.totalScore = this.calculateOkrScore(okr.keyResults, selfReportData);
 
     await this.userOkrRepo.save(okr);
     return okr;
   }
 
-  // --- DEAN REVIEW: Trưởng khoa duyệt bài tự khai ---
+  // --- DEAN REVIEW: Dean reviews self-reports ---
 
+  /**
+   * Fetches OKR self-reports filtered by status.
+   * Non-admin roles are restricted to their own department.
+   * 
+   * @param status Targets status (defaults to 'SUBMITTED')
+   * @param requesterId The user fetching submitted reports
+   * @returns Array of matching UserOkr records
+   */
   async getSubmittedOkrs(status: string = 'SUBMITTED', requesterId?: string) {
-    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    // Auto-submit expired reviews if cycle is closed or past its end date
     await this.checkAndAutoSubmitAllExpiredReports();
 
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
@@ -945,6 +1140,15 @@ export class OkrService {
     return okrs;
   }
 
+  /**
+   * Performs manager evaluation on user self-report.
+   * Computes manager's score, sets status to COMPLETED, and syncs points to the user's Evaluation sheet.
+   * 
+   * @param id UserOkr ID
+   * @param managerReportData Manager validated quantifications
+   * @returns Saved UserOkr record
+   * @throws {NotFoundException} If the OKR is not found
+   */
   async managerReviewOkr(id: string, managerReportData: any) {
     const okr = await this.userOkrRepo.findOne({ where: { id } });
     if (!okr) throw new NotFoundException('OKR not found');
@@ -955,7 +1159,7 @@ export class OkrService {
 
     await this.userOkrRepo.save(okr);
 
-    // 🔄 Auto-sync: Clone điểm từ OKR sang Phiếu Đánh Giá
+    // 🔄 Auto-sync: Clone scores from OKR to Evaluation Form
     await this.syncEvaluationFromOkr(okr);
 
     await this.notificationService.create(
@@ -966,12 +1170,16 @@ export class OkrService {
   }
 
   // ==========================================
-  // --- EVALUATION FORM: PHIẾU ĐÁNH GIÁ ---
+  // --- EVALUATION FORM: EVALUATION SHEET ---
   // ==========================================
 
   /**
-   * Tìm UserOkr phù hợp nhất cho user:
-   * Ưu tiên: COMPLETED (đã chốt điểm) > SUBMITTED > ACCEPTED > PENDING
+   * Prioritizes finding the most applicable UserOkr record in a cycle for evaluation building.
+   * Preference hierarchy: COMPLETED (manager rated) > SUBMITTED (self-reported) > ACCEPTED > PENDING
+   * 
+   * @param userId Target user ID
+   * @param cycleId Evaluation cycle ID
+   * @returns Best matching UserOkr record, or null
    */
   private async findBestUserOkr(userId: string, cycleId?: string): Promise<UserOkr | null> {
     const whereClause: any = { userId };
@@ -979,21 +1187,21 @@ export class OkrService {
       whereClause.cycleId = cycleId;
     }
 
-    // Ưu tiên tìm OKR đã COMPLETED (manager đã chốt điểm)
+    // Prioritize finding COMPLETED OKR (manager finalized score)
     const completed = await this.userOkrRepo.findOne({
       where: { ...whereClause, status: 'COMPLETED' },
       order: { updatedAt: 'DESC' },
     });
     if (completed) return completed;
 
-    // Fallback: OKR đã SUBMITTED (user đã tự khai)
+    // Fallback: SUBMITTED OKR (user self-reported)
     const submitted = await this.userOkrRepo.findOne({
       where: { ...whereClause, status: 'SUBMITTED' },
       order: { updatedAt: 'DESC' },
     });
     if (submitted) return submitted;
 
-    // Fallback cuối: bất kỳ OKR nào
+    // Final fallback: any OKR
     return this.userOkrRepo.findOne({
       where: whereClause,
       order: { updatedAt: 'DESC' },
@@ -1001,7 +1209,10 @@ export class OkrService {
   }
 
   /**
-   * Tạo evaluationData từ UserOkr — clone điểm từng Objective (A, B, C, D)
+   * Formats objective-level scores (self vs manager) from a UserOkr structure.
+   * 
+   * @param okr Source UserOkr entity
+   * @returns Formatted evaluation list and score summaries
    */
   private buildEvaluationDataFromOkr(okr: UserOkr) {
     const evaluationData: any[] = [];
@@ -1011,7 +1222,7 @@ export class OkrService {
     if (okr && okr.keyResults && Array.isArray(okr.keyResults)) {
       for (const obj of okr.keyResults) {
         const selfScore = this.calcSingleObjectiveScore(obj, okr.selfReportData || {});
-        // Nếu manager đã duyệt OKR (COMPLETED) thì lấy điểm manager, nếu chưa thì = 0
+        // If manager has approved OKR (COMPLETED), take manager score, otherwise set to 0
         const mgrScore = okr.managerReportData
           ? this.calcSingleObjectiveScore(obj, okr.managerReportData)
           : 0;
@@ -1032,8 +1243,17 @@ export class OkrService {
     return { evaluationData, selfScoreTotal, principalScoreTotal };
   }
 
+  /**
+   * Retrieves or creates the UserEvaluation form sheet for a specific user and cycle.
+   * Clones and updates structural objective scores from the user's best available OKR.
+   * 
+   * @param userId Target user ID
+   * @param cycleId Targeted cycle ID
+   * @returns UserEvaluation entity decorated with OKR details
+   * @throws {NotFoundException} If form is not resolvable
+   */
   async getMyEvaluationForm(userId: string, cycleId?: string) {
-    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    // Auto-submit expired reviews if cycle is closed or past its end date
     await this.checkAndAutoSubmitAllExpiredReports();
 
     let targetCycleId = cycleId;
@@ -1066,7 +1286,7 @@ export class OkrService {
       relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
     });
 
-    // Tìm UserOkr phù hợp nhất
+    // Find the most appropriate UserOkr
     const okr = await this.findBestUserOkr(userId, targetCycleId);
 
     if (!okr) {
@@ -1080,10 +1300,10 @@ export class OkrService {
       return null;
     }
 
-    // Build evaluationData từ OKR Template đã giao cho user
+    // Build evaluationData from OKR Template assigned to user
     const { evaluationData, selfScoreTotal, principalScoreTotal } = this.buildEvaluationDataFromOkr(okr);
 
-    // Lưu tên OKR/Template để FE hiển thị
+    // Save OKR/Template name for FE display
     const okrObjectiveName = okr?.objective || '';
 
     if (!form) {
@@ -1097,13 +1317,13 @@ export class OkrService {
       });
       await this.userEvaluationRepo.save(form);
 
-      // Reload với relations
+      // Reload with relations
       form = await this.userEvaluationRepo.findOne({
         where: { id: form.id },
         relations: ['user', 'user.department', 'user.managementPosition', 'cycle'],
       });
     } else {
-      // Chỉ cập nhật evaluationData từ OKR nếu phiếu chưa ở trạng thái chốt EVALUATED
+      // Only update evaluationData from OKR if form is not in finalized EVALUATED status
       if (form.status !== 'EVALUATED') {
         form.evaluationData = evaluationData;
         form.selfScoreTotal = selfScoreTotal;
@@ -1115,7 +1335,7 @@ export class OkrService {
       await this.userEvaluationRepo.save(form);
     }
 
-    // Attach thêm thông tin để FE hiển thị
+    // Attach additional details for FE rendering
     return {
       ...form,
       okrObjectiveName,
@@ -1123,11 +1343,20 @@ export class OkrService {
     };
   }
 
+  /**
+   * User submits their self-evaluation sheet details (selfComment, selfRating).
+   * Sets status to SUBMITTED and notifies managers/admins.
+   * 
+   * @param userId Submitting user ID
+   * @param body Payload containing selfComment, selfRating, cycleId
+   * @returns Saved UserEvaluation entity
+   * @throws {NotFoundException} If the evaluation form cannot be loaded
+   */
   async submitMyEvaluationForm(userId: string, body: any) {
     const form = await this.getMyEvaluationForm(userId, body.cycleId);
     if (!form) throw new NotFoundException('Evaluation Form not found');
 
-    // Cập nhật phần tự nhận xét
+    // Update self-comment section
     const entity = await this.userEvaluationRepo.findOne({ 
       where: { id: form.id },
       relations: ['user', 'user.department', 'cycle']
@@ -1140,7 +1369,7 @@ export class OkrService {
 
     const saved = await this.userEvaluationRepo.save(entity);
 
-    // Gửi thông báo cho các quản lý/admin khi nộp phiếu tự đánh giá!
+    // Send notification to managers/admins when self-evaluation is submitted
     try {
       const managers = await this.userEvaluationRepo.manager.getRepository(User).find({
         relations: ['roles', 'managementPosition'],
@@ -1171,8 +1400,15 @@ export class OkrService {
     return saved;
   }
 
+  /**
+   * Retrieves evaluation sheets submitted by users.
+   * Scopes results to department if restricted.
+   * 
+   * @param requesterId Requester user ID
+   * @returns Array of UserEvaluation records
+   */
   async getSubmittedEvaluations(requesterId?: string) {
-    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    // Auto-submit expired reviews if cycle is closed or past its end date
     await this.checkAndAutoSubmitAllExpiredReports();
 
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
@@ -1188,6 +1424,15 @@ export class OkrService {
     return evaluations;
   }
 
+  /**
+   * Manager reviews and grades a user's final quality evaluation form.
+   * Sets final rating and comments, changing status to EVALUATED.
+   * 
+   * @param id UserEvaluation ID
+   * @param body Payload containing managerComment and managerRating
+   * @returns Saved UserEvaluation record
+   * @throws {NotFoundException} If evaluation is not found
+   */
   async managerReviewEvaluation(id: string, body: any) {
     const form = await this.userEvaluationRepo.findOne({ where: { id } });
     if (!form) throw new NotFoundException('Evaluation form not found');
@@ -1201,8 +1446,10 @@ export class OkrService {
   }
 
   /**
-   * Auto-sync: Khi manager chốt điểm OKR → tự động cập nhật UserEvaluation
-   * Đây là trigger chính để clone điểm từ OKR Template sang Phiếu Đánh Giá
+   * Auto-sync: Clones and updates objective-level scores to UserEvaluation
+   * when a manager completes review on user's OKR.
+   * 
+   * @param okr Completed UserOkr entity
    */
   private async syncEvaluationFromOkr(okr: UserOkr) {
     const { evaluationData, selfScoreTotal, principalScoreTotal } =
@@ -1222,7 +1469,7 @@ export class OkrService {
         cycleId: okr.cycleId,
       });
     } else {
-      // Chỉ cập nhật nếu phiếu chưa bị EVALUATED (manager chưa xếp loại cuối)
+      // Only update if form is not EVALUATED yet (manager has not finalized rating)
       if (form.status !== 'EVALUATED') {
         form.evaluationData = evaluationData;
         form.selfScoreTotal = selfScoreTotal;
@@ -1234,37 +1481,46 @@ export class OkrService {
   }
 
   // ==========================================
-  // --- DEAN DASHBOARD: API TỔNG HỢP ---
+  // --- DEAN DASHBOARD: AGGREGATE API ---
   // ==========================================
 
+  /**
+   * Compiles comprehensive statistics and reports for the Dean / Department Head dashboard.
+   * Calculates cycle progress, summary metrics, OKR status distributions, department-wise stats,
+   * individual user ranking lists, final grading distributions, and action items list.
+   * 
+   * @param requesterId Requesting user ID for RBAC restriction
+   * @param cycleId Evaluation cycle filter ID (defaults to active OPEN cycle)
+   * @returns Dashboard statistics object
+   */
   async getDeanDashboard(requesterId?: string, cycleId?: string) {
-    // Tự động chốt nộp quá hạn khi kỳ đánh giá đã đóng/kết thúc
+    // Auto-submit expired reviews if cycle is closed or past its end date
     await this.checkAndAutoSubmitAllExpiredReports();
 
     const restrictDeptId = await this.getRestrictDeptId(requesterId);
 
-    // 1. Tìm kỳ đánh giá OPEN (hoặc kỳ mới nhất)
+    // 1. Find OPEN evaluation cycle (or latest cycle)
     const cycles = await this.userEvaluationRepo.manager
       .getRepository(EvaluationCycle)
       .find({ where: { isDel: false }, order: { createdAt: 'DESC' } });
 
-    // Xác định kỳ hiện tại đang xem
+    // Determine current cycle being viewed
     let currentCycle: EvaluationCycle | null = null;
     if (cycleId) {
       currentCycle = cycles.find(c => c.id === cycleId) || null;
     } else {
-      // Mặc định: kỳ OPEN, nếu không có thì kỳ mới nhất
+      // Default: OPEN cycle, otherwise fallback to latest cycle
       const openCycle = cycles.find(c => c.status === EvaluationStatus.OPEN);
       currentCycle = openCycle || cycles[0] || null;
     }
 
-    // Kiểm tra kỳ tương lai (startDate > now)
+    // Verify if it is a future cycle (startDate > now)
     const now = new Date();
     const isFutureCycle = currentCycle?.startDate
       ? new Date(currentCycle.startDate) > now
       : false;
 
-    // Tính tiến độ kỳ
+    // Calculate cycle progress percentage
     let cycleProgressPercent = 0;
     if (!isFutureCycle && currentCycle?.startDate && currentCycle?.endDate) {
       const start = new Date(currentCycle.startDate).getTime();
@@ -1274,14 +1530,14 @@ export class OkrService {
       }
     }
 
-    // Tính số ngày còn lại
+    // Calculate remaining days
     let daysRemaining: number | null = null;
     if (currentCycle?.endDate) {
       const diff = new Date(currentCycle.endDate).getTime() - now.getTime();
       daysRemaining = Math.ceil(diff / (1000 * 60 * 60 * 24));
     }
 
-    // 2. Lấy OKR theo kỳ đang xem (kèm user, department)
+    // 2. Retrieve OKRs for current cycle (with user, department)
     const okrWhere: any = {};
     if (currentCycle) {
       okrWhere.cycleId = currentCycle.id;
@@ -1292,7 +1548,7 @@ export class OkrService {
       order: { updatedAt: 'DESC' },
     });
 
-    // 3. Lấy phiếu đánh giá theo kỳ đang xem
+    // 3. Retrieve evaluations for current cycle
     const evalWhere: any = {};
     if (currentCycle) {
       evalWhere.cycleId = currentCycle.id;
@@ -1303,7 +1559,7 @@ export class OkrService {
       order: { updatedAt: 'DESC' },
     });
 
-    // 4. Lấy tất cả departments
+    // 4. Retrieve all departments
     let departments = await this.userEvaluationRepo.manager
       .getRepository('Department')
       .find({ relations: ['users'], order: { name: 'ASC' } }) as any[];
@@ -1314,7 +1570,7 @@ export class OkrService {
       departments = departments.filter(d => d.id === restrictDeptId);
     }
 
-    // 5. Tổng hợp SUMMARY
+    // 5. Aggregate SUMMARY
     const statusCounts: Record<string, number> = {
       PENDING: 0, NEGOTIATING: 0, ACCEPTED: 0, SUBMITTED: 0, COMPLETED: 0, REJECTED: 0,
     };
@@ -1336,10 +1592,10 @@ export class OkrService {
       notStarted: totalStaff - allOkrs.length,
     };
 
-    // 6. OKR theo trạng thái
+    // 6. OKRs by status
     const okrsByStatus = statusCounts;
 
-    // 7. Thống kê theo bộ môn
+    // 7. Statistics by department
     const deptMap: Record<string, {
       deptId: string; deptName: string; deptCode: string; memberCount: number;
       completedCount: number; submittedCount: number; acceptedCount: number; pendingCount: number;
@@ -1386,7 +1642,7 @@ export class OkrService {
       completionRate: d.memberCount > 0 ? Math.round((d.completedCount / d.memberCount) * 100) : 0,
     }));
 
-    // 8. Bảng xếp hạng cá nhân (chỉ SUBMITTED hoặc COMPLETED, max 50)
+    // 8. Individual ranking board (only SUBMITTED or COMPLETED, max 50)
     const rankableOkrs = allOkrs
       .filter(o => o.status === 'SUBMITTED' || o.status === 'COMPLETED')
       .sort((a, b) => {
@@ -1411,7 +1667,7 @@ export class OkrService {
       status: okr.status,
     }));
 
-    // 9. Phân bổ xếp loại + chi tiết danh sách người theo từng xếp loại
+    // 9. Rating distribution + detail lists per rating
     const ratingDistribution: Record<string, number> = {};
     const ratingDetails: Record<string, Array<{
       userId: string;
@@ -1438,9 +1694,7 @@ export class OkrService {
       }
     }
 
-
-
-    // 11. Action items (chỉ có ý nghĩa với kỳ đang OPEN)
+    // 11. Action items (only applicable for OPEN cycle)
     const actionItems: Array<{ type: string; count: number; label: string; route: string; severity: string }> = [];
 
     if (!isFutureCycle) {
@@ -1497,7 +1751,6 @@ export class OkrService {
         daysRemaining,
         isFuture: isFutureCycle,
       } : null,
-      // Danh sách tất cả kỳ để FE render dropdown
       allCycles: cycles.map(c => ({
         id: c.id,
         name: c.name,
@@ -1511,9 +1764,7 @@ export class OkrService {
       staffRanking,
       ratingDistribution,
       ratingDetails,
-
       actionItems,
     };
   }
-
 }

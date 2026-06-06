@@ -4,10 +4,19 @@ import { Repository } from 'typeorm';
 import { SystemLog, LogStatus } from '../../database/entities/system-log.entity';
 import { User } from '../../database/entities/user.entity';
 
+/**
+ * Service handling system audit logs.
+ * Records user actions, system actions, and provides query interfaces for log displays
+ * and cleanups.
+ */
 @Injectable()
 export class SystemLogsService {
   private readonly logger = new Logger(SystemLogsService.name);
 
+  /**
+   * @param logRepository Repository for SystemLog entity
+   * @param userRepository Repository for User entity
+   */
   constructor(
     @InjectRepository(SystemLog)
     private readonly logRepository: Repository<SystemLog>,
@@ -15,7 +24,13 @@ export class SystemLogsService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  // 1. Hàm để các service khác gọi khi muốn ghi log
+  /**
+   * Writes an audit log record into the database.
+   * Validates user reference to avoid foreign key violations.
+   * 
+   * @param data Payload containing log details (userId, action, resource, message, details, status)
+   * @returns The saved SystemLog entity
+   */
   async createLog(data: {
     userId?: string;
     action: string;
@@ -24,7 +39,7 @@ export class SystemLogsService {
     details?: any;
     status?: LogStatus;
   }) {
-    // Kiểm tra user có tồn tại trong DB không, nếu không thì set null để tránh FK violation
+    // Check if user exists in database; if not, set user to null to prevent Foreign Key (FK) constraint violation
     let userRef: { id: string } | null = null;
     if (data.userId) {
       const userExists = await this.userRepository.findOne({ where: { id: data.userId } });
@@ -48,15 +63,22 @@ export class SystemLogsService {
     return this.logRepository.save(log);
   }
 
-  // 2. Hàm cho Frontend lấy danh sách log hiển thị
+  /**
+   * Retrieves all system logs, including associated user records, 
+   * ordered by creation date descending.
+   * 
+   * @returns Array of SystemLog entities
+   */
   async findAll() {
     return this.logRepository.find({
-      relations: ['user'], // Lấy thông tin người làm
-      order: { createdAt: 'DESC' }, // Mới nhất lên đầu
+      relations: ['user'], // Retrieve associated user info
+      order: { createdAt: 'DESC' }, // Order by newest first
     });
   }
 
-  // 3. Xóa toàn bộ nhật ký (Giải phóng bộ nhớ)
+  /**
+   * Truncates/clears all audit log records from the database.
+   */
   async clearAll() {
     await this.logRepository.clear();
   }

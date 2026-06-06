@@ -1,13 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OkrTemplate } from '../../database/entities/performance/okr-template.entity';
-import { UserOkr } from '../../database/entities/performance/user-okr.entity';
+import { OkrTemplate } from '../../database/entities/performance-evaluation/okr-template.entity';
+import { UserOkr } from '../../database/entities/performance-evaluation/user-okr.entity';
 import { User, JobTitle } from '../../database/entities/user.entity';
 import { NotificationService } from '../notification/notification.service';
 
+/**
+ * Service handling OKR Template operations.
+ * Includes structural validation of template objectives, unique title generation,
+ * CRUD operations on templates, and distributing templates to target users (applying templates).
+ */
 @Injectable()
 export class OkrTemplateService {
+  /**
+   * @param okrTemplateRepository Repository for OkrTemplate entity
+   * @param userOkrRepository Repository for UserOkr entity
+   * @param userRepository Repository for User entity
+   * @param notificationService Service to record and dispatch notifications
+   */
   constructor(
     @InjectRepository(OkrTemplate)
     private okrTemplateRepository: Repository<OkrTemplate>,
@@ -18,7 +29,11 @@ export class OkrTemplateService {
     private notificationService: NotificationService,
   ) { }
 
-  // Trả về danh sách Chức danh nghề nghiệp từ enum JobTitle
+  /**
+   * Map out JobTitle enum key-value pairs for dropdown UI inputs.
+   * 
+   * @returns Array of job title options
+   */
   getJobTitles() {
     return Object.entries(JobTitle).map(([key, value]) => ({
       value: value,
@@ -27,12 +42,23 @@ export class OkrTemplateService {
     }));
   }
 
+  /**
+   * Retrieves all OKR templates, ordered by creation date descending.
+   * 
+   * @returns Array of OkrTemplate entities
+   */
   async findAll() {
     return this.okrTemplateRepository.find({
       order: { createdAt: 'DESC' },
     });
   }
 
+  /**
+   * Retrieves OKR templates belonging to a specific department.
+   * 
+   * @param departmentId Target department ID
+   * @returns Array of OkrTemplate entities
+   */
   async findByDepartment(departmentId: string) {
     return this.okrTemplateRepository.find({
       where: { departmentId },
@@ -40,6 +66,12 @@ export class OkrTemplateService {
     });
   }
 
+  /**
+   * Retrieves OKR templates created by a specific user.
+   * 
+   * @param userId Creator user ID
+   * @returns Array of OkrTemplate entities
+   */
   async findByCreator(userId: string) {
     return this.okrTemplateRepository.find({
       where: { createdByUserId: userId },
@@ -47,6 +79,13 @@ export class OkrTemplateService {
     });
   }
 
+  /**
+   * Retrieves a single template by its ID.
+   * 
+   * @param id Target template ID
+   * @returns The matching OkrTemplate entity
+   * @throws {NotFoundException} If the template is not found
+   */
   async findOne(id: string) {
     const template = await this.okrTemplateRepository.findOne({ where: { id } });
     if (!template) {
@@ -55,6 +94,15 @@ export class OkrTemplateService {
     return template;
   }
 
+  /**
+   * Recursively validates structural weights.
+   * Guarantees non-negative scores and verifies that sub-item weights do not exceed parent weight bounds.
+   * 
+   * @param items Array of structural items (objectives, KRs, sub-KRs)
+   * @param isObjective Flag indicating if processing high-level Objectives
+   * @returns Accumulated score points sum
+   * @throws {BadRequestException} If score validation fails or children are empty for an objective
+   */
   private validateScoresRecursively(items: any[], isObjective: boolean = false): number {
     let totalScore = 0;
     for (const item of items) {
@@ -76,6 +124,13 @@ export class OkrTemplateService {
     return totalScore;
   }
 
+  /**
+   * Validates that the template structure contains objectives, that sub-weights conform,
+   * and that the overall total Objective maxScore sum is exactly 100.
+   * 
+   * @param structure Structural array of objectives
+   * @throws {BadRequestException} If template structure is invalid or total score is not 100
+   */
   private validateTemplateStructure(structure?: any[]) {
     if (!structure || structure.length === 0) {
       throw new BadRequestException('Template phải có ít nhất 1 Mục tiêu (Objective).');
@@ -88,6 +143,14 @@ export class OkrTemplateService {
     }
   }
 
+  /**
+   * Generates a unique template title.
+   * Append a counter suffix (e.g., "Title(1)") if the title already exists.
+   * 
+   * @param title Proposed title
+   * @param excludeId Template ID to exclude from query (during updates)
+   * @returns Confirmed unique title string
+   */
   private async generateUniqueTitle(title: string, excludeId?: string): Promise<string> {
     const query = this.okrTemplateRepository.createQueryBuilder('template')
       .select('template.title', 'title');
@@ -119,6 +182,14 @@ export class OkrTemplateService {
     return newTitle;
   }
 
+  /**
+   * Creates a new OKR template.
+   * Validates structure, assigns unique title, and resolves creator profile metadata.
+   * 
+   * @param createDto Payload containing template details
+   * @param userId Creator user ID
+   * @returns The saved OkrTemplate entity
+   */
   async create(createDto: any, userId?: string) {
     this.validateTemplateStructure(createDto.structure);
 
@@ -145,6 +216,17 @@ export class OkrTemplateService {
     return saved;
   }
 
+  /**
+   * Updates an existing OKR template.
+   * Validates structure, enforces ownership permissions, and handles title duplication checks.
+   * 
+   * @param id The ID of the template to update
+   * @param updateDto Partial payload updates
+   * @param userId Requesting user ID for ownership validation
+   * @param isAdmin Flag indicating if requesting user is Admin
+   * @returns The updated OkrTemplate entity
+   * @throws {ForbiddenException} If a non-admin attempts to edit a template they did not create
+   */
   async update(id: string, updateDto: any, userId?: string, isAdmin?: boolean) {
     if (updateDto.structure) {
       this.validateTemplateStructure(updateDto.structure);
@@ -162,6 +244,16 @@ export class OkrTemplateService {
     return this.okrTemplateRepository.save(updated);
   }
 
+  /**
+   * Deletes an OKR template.
+   * Enforces ownership validation before deletion.
+   * 
+   * @param id The ID of the template to delete
+   * @param userId Requesting user ID
+   * @param isAdmin Flag indicating if requester is Admin
+   * @returns Success response object
+   * @throws {ForbiddenException} If a non-admin attempts to delete a template they did not create
+   */
   async remove(id: string, userId?: string, isAdmin?: boolean) {
     const template = await this.findOne(id);
     if (!isAdmin && userId && template.createdByUserId !== userId) {
@@ -171,6 +263,18 @@ export class OkrTemplateService {
     return { success: true };
   }
 
+  /**
+   * Applies/assigns an OKR template to a list of target users for a specific cycle.
+   * Enforces department-level permissions (non-admins cannot assign templates to users outside their department).
+   * Creates a UserOkr record for each user under PENDING status and sends alerts.
+   * 
+   * @param templateId The ID of the template to distribute
+   * @param applyDto Configuration parameters containing target userIds, cycleId, and deadline
+   * @param requesterId The user initiating the template application
+   * @returns Confirmation metadata and list of created UserOkr entities
+   * @throws {BadRequestException} If template is empty, target users are empty, or user is already assigned an OKR in this cycle
+   * @throws {ForbiddenException} If requester attempts to assign templates outside their department scope
+   */
   async applyTemplate(
     templateId: string,
     applyDto: { userIds: string[]; cycleId: string; deadline?: Date },
@@ -185,7 +289,7 @@ export class OkrTemplateService {
       throw new BadRequestException('Phải chọn ít nhất 1 người để giao OKR');
     }
 
-    // 1. Kiểm tra giới hạn phòng ban của người yêu cầu
+    // 1. Resolve department restriction of the requesting user
     let restrictDeptId: string | null = null;
     if (requesterId) {
       const requester = await this.userRepository.findOne({
@@ -212,14 +316,14 @@ export class OkrTemplateService {
         continue;
       }
 
-      // 2. Kiểm tra nếu nhân viên được gán nằm ngoài bộ môn quản lý
+      // 2. Verify that target user is not outside the manager's department boundary
       if (restrictDeptId && user.department?.id !== restrictDeptId) {
         throw new ForbiddenException(
           `Bạn không có quyền giao OKR cho nhân sự "${user.name || user.email}" vì người này thuộc bộ môn khác.`
         );
       }
 
-      // Kiểm tra xem User đã có OKR trong kỳ đánh giá này chưa
+      // Validate if target user already has an OKR assigned for this cycle
       let userOkr = await this.userOkrRepository.findOne({
         where: { userId: userId, cycleId: applyDto.cycleId }
       });
@@ -230,7 +334,7 @@ export class OkrTemplateService {
         );
       }
 
-      // Tạo mới hoàn toàn
+      // Create a new UserOkr record
       userOkr = this.userOkrRepository.create({
         user: user,
         userId: userId,
@@ -246,7 +350,7 @@ export class OkrTemplateService {
       const saved = await this.userOkrRepository.save(userOkr);
       results.push(saved);
 
-      // 🔔 Gửi thông báo cho user được chỉ định
+      // 🔔 Dispatch notification to the assigned user
       const deadlineStr = applyDto.deadline
         ? ` (Deadline: ${new Date(applyDto.deadline).toLocaleDateString('vi-VN')})`
         : '';

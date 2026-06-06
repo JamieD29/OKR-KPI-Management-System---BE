@@ -12,9 +12,9 @@ import { User } from '../../database/entities/user.entity';
 import { Role } from '../../database/entities/role.entity';
 import { Department } from '../../database/entities/department.entity';
 import { ManagementPosition } from '../../database/entities/management-position.entity';
-import { UserOkr } from '../../database/entities/performance/user-okr.entity';
-import { UserEvaluation } from '../../database/entities/performance/user-evaluation.entity';
-import { EvaluationCycle } from '../../database/entities/performance/evaluation-cycle.entity';
+import { UserOkr } from '../../database/entities/performance-evaluation/user-okr.entity';
+import { UserEvaluation } from '../../database/entities/performance-evaluation/user-evaluation.entity';
+import { EvaluationCycle } from '../../database/entities/performance-evaluation/evaluation-cycle.entity';
 
 // 👇 Import Notification Service
 import { NotificationService } from '../notification/notification.service';
@@ -23,8 +23,22 @@ import { NotificationService } from '../notification/notification.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 
+/**
+ * Service handling user operations, including user creation, profiles updates,
+ * role assignments, management position mappings, department allocations, 
+ * and retrieving comprehensive user profiles with cycle-based OKRs and evaluations.
+ */
 @Injectable()
 export class UsersService {
+  /**
+   * @param userRepository Repository for User entity
+   * @param roleRepository Repository for Role entity
+   * @param positionRepository Repository for ManagementPosition entity
+   * @param userOkrRepo Repository for UserOkr entity
+   * @param userEvalRepo Repository for UserEvaluation entity
+   * @param cycleRepository Repository for EvaluationCycle entity
+   * @param notificationService Service to record and dispatch notifications
+   */
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -47,13 +61,26 @@ export class UsersService {
     private notificationService: NotificationService,
   ) {}
 
-  // 🔥 HÀM PHỤ TRỢ: Chuẩn hóa Slug
+  /**
+   * Normalizes an input string to uppercase slug format.
+   * 
+   * @param slug Input string
+   * @returns Uppercased string
+   */
   private normalizeSlug(slug: string): string {
     return slug.toUpperCase();
   }
 
+  /**
+   * Registers a new user in the system.
+   * Maps roles (defaulting to USER) and departments.
+   * 
+   * @param createUserDto Payload containing email, name, roles, departmentId, and status details
+   * @returns The newly registered User entity
+   * @throws {ConflictException} If the email is already in use
+   */
   async create(createUserDto: CreateUserDto) {
-    // 1. Check email trùng
+    // 1. Check for duplicate email
     const existingUser = await this.userRepository.findOne({
       where: { email: createUserDto.email },
     });
@@ -63,12 +90,12 @@ export class UsersService {
 
     const { roles, departmentId, ...basicUserData } = createUserDto;
 
-    // 2. Tạo instance user chỉ với thông tin cơ bản
+    // 2. Instantiate user entity with basic fields
     const newUser = this.userRepository.create(basicUserData);
 
-    // 3. Xử lý Role (Tìm Entity từ Enum gửi lên)
+    // 3. Process Roles (Find entities from input slugs)
     if (roles && roles.length > 0) {
-      // 👇 Chuẩn hóa slug trước khi tìm
+      // 👇 Normalize input slugs
       const normalizedRoles = roles.map((r) => this.normalizeSlug(r));
 
       const roleEntities = await this.roleRepository.find({
@@ -76,14 +103,14 @@ export class UsersService {
       });
       newUser.roles = roleEntities;
     } else {
-      // Nếu không gửi role -> Gán mặc định USER
+      // Fallback: Assign default USER role if empty
       const defaultRole = await this.roleRepository.findOne({
-        where: { slug: 'USER' }, // db lưu là 'USER' in hoa
+        where: { slug: 'USER' }, // Database stores uppercase 'USER'
       });
       if (defaultRole) newUser.roles = [defaultRole];
     }
 
-    // 4. Xử lý Department (Nếu có)
+    // 4. Handle Department association if provided
     if (departmentId) {
       newUser.department = { id: departmentId } as any;
     }
@@ -92,8 +119,16 @@ export class UsersService {
   }
 
   // ======================================================
-  // 2. FIND ALL: Lấy danh sách (Cho Admin Portal)
+  // 2. FIND ALL: Retrieve user list (For Admin Portal)
   // ======================================================
+  
+  /**
+   * Retrieves all users, optionally filtered by a department ID.
+   * Ordered by creation date descending.
+   * 
+   * @param departmentId Optional department filter ID
+   * @returns Array of User entities with resolved relations
+   */
   async findAll(departmentId?: string) {
     const where: any = {};
     if (departmentId) {
@@ -109,8 +144,16 @@ export class UsersService {
   }
 
   // ======================================================
-  // 3. FIND ONE: Chi tiết User
+  // 3. FIND ONE: Fetch detailed user profile
   // ======================================================
+  
+  /**
+   * Retrieves a single user's profile with relationships by their ID.
+   * 
+   * @param id The user ID
+   * @returns The matching User entity
+   * @throws {NotFoundException} If the user is not found
+   */
   async findOne(id: string) {
     const user = await this.userRepository.findOne({
       where: { id },
@@ -124,8 +167,15 @@ export class UsersService {
   }
 
   // ======================================================
-  // 4. FIND BY EMAIL (Dùng cho Auth/Login)
+  // 4. FIND BY EMAIL (Used by Auth/Login workflow)
   // ======================================================
+  
+  /**
+   * Retrieves a user by their email address.
+   * 
+   * @param email The user email
+   * @returns The User entity, or null if not found
+   */
   async findByEmail(email: string) {
     return this.userRepository.findOne({
       where: { email },
@@ -134,8 +184,18 @@ export class UsersService {
   }
 
   // ======================================================
-  // 5. UPDATE PROFILE (Cá nhân tự sửa)
+  // 5. UPDATE PROFILE (User self-service update)
   // ======================================================
+  
+  /**
+   * Updates a user's personal profile details.
+   * Validates that the staffCode is unique across the system if modified.
+   * 
+   * @param userId The ID of the user updating their profile
+   * @param updateProfileDto Payload containing the modified profile fields
+   * @returns The updated User entity
+   * @throws {ConflictException} If the staffCode is already taken by another user
+   */
   async updateProfile(userId: string, updateProfileDto: UpdateProfileDto) {
     const user = await this.findOne(userId);
 
@@ -164,17 +224,27 @@ export class UsersService {
   }
 
   // ======================================================
-  // 6. UPDATE ROLES (Chức năng Admin Phân Quyền) 🔥 QUAN TRỌNG ĐÃ FIX
+  // 6. UPDATE ROLES (Admin Role Assignment)
   // ======================================================
+  
+  /**
+   * Updates the authorization roles assigned to a user.
+   * Intended for Administrator configuration.
+   * 
+   * @param userId Target user ID
+   * @param roleSlugs Array of role slugs (e.g. ['ADMIN', 'USER'])
+   * @returns The updated User entity
+   * @throws {BadRequestException} If role slugs do not exist in the database
+   */
   async updateRoles(userId: string, roleSlugs: string[]) {
     const user = await this.findOne(userId);
 
-    // 👇 1. Chuẩn hóa slug
+    // 👇 1. Normalize slugs
     const normalizedSlugs = roleSlugs.map((slug) => this.normalizeSlug(slug));
 
     console.log(`🔍 Update Roles: ${roleSlugs} -> Normalized: ${normalizedSlugs}`); // Debug log
 
-    // 2. Tìm các Role Entity
+    // 2. Retrieve Role entities
     const roles = await this.roleRepository.find({
       where: {
         slug: In(normalizedSlugs),
@@ -187,20 +257,34 @@ export class UsersService {
       );
     }
 
-    // 3. Gán lại mảng roles cho user
+    // 3. Update roles mapping
     user.roles = roles;
 
     return this.userRepository.save(user);
   }
 
   // ======================================================
-  // 7. ASSIGN MANAGEMENT POSITION: Gán chức vụ quản lý
+  // 7. ASSIGN MANAGEMENT POSITION: Map management position
   // ======================================================
+  
+  /**
+   * Assigns or clears a management position for a user.
+   * Enforces unique business constraints:
+   * - Only one user can hold the Dean ('TRUONG_KHOA') position.
+   * - Only one user per department can hold the Department Head ('TRUONG_BO_MON') position.
+   * Dispatches notification alert logs to the user.
+   * 
+   * @param userId Target user ID
+   * @param positionId Target position ID, or null to clear
+   * @returns The updated User entity
+   * @throws {NotFoundException} If the management position is not found
+   * @throws {BadRequestException} If position limits are exceeded or user lacks department mapping
+   */
   async assignManagementPosition(userId: string, positionId: string | null) {
     const user = await this.findOne(userId);
 
     if (positionId) {
-      // Gán chức vụ mới
+      // Assign new position
       const position = await this.positionRepository.findOne({ where: { id: positionId } });
       if (!position) {
         throw new NotFoundException(`Chức vụ với ID "${positionId}" không tồn tại`);
@@ -237,18 +321,18 @@ export class UsersService {
 
       user.managementPosition = position;
 
-      // Tạo thông báo cho user
+      // Notify the user
       await this.notificationService.create(
         userId,
         `Bạn đã được gán chức vụ quản lý: ${position.name}`,
       );
     } else {
-      // Gỡ chức vụ
+      // Remove position
       if (user.managementPosition) {
         const oldPositionName = user.managementPosition.name;
         user.managementPosition = null as any;
 
-        // Thông báo gỡ chức vụ
+        // Notify position removal
         await this.notificationService.create(
           userId,
           `Chức vụ quản lý "${oldPositionName}" của bạn đã được gỡ bỏ`,
@@ -260,19 +344,32 @@ export class UsersService {
   }
 
   // ======================================================
-  // 7b. ASSIGN DEPARTMENT: Gán / gỡ bộ môn
+  // 7b. ASSIGN DEPARTMENT: Allocate/deallocate department
   // ======================================================
+  
+  /**
+   * Assigns or clears a department allocation for a user.
+   * If the user is a Department Head ('TRUONG_BO_MON'), verifies that the target department
+   * does not already have an active department head assigned.
+   * Dispatches notification logs to the user.
+   * 
+   * @param userId Target user ID
+   * @param departmentId Target department ID, or null to clear
+   * @returns The updated User entity
+   * @throws {NotFoundException} If the department is not found
+   * @throws {BadRequestException} If target department already has a head and user is TRUONG_BO_MON
+   */
   async assignDepartment(userId: string, departmentId: string | null) {
     const user = await this.findOne(userId);
 
     if (departmentId) {
-      // Gán bộ môn mới
+      // Associate new department
       const department = await this.userRepository.manager.getRepository(Department).findOne({ where: { id: departmentId } });
       if (!department) {
         throw new NotFoundException(`Bộ môn với ID "${departmentId}" không tồn tại`);
       }
 
-      // Nếu user là Trưởng bộ môn, kiểm tra xem bộ môn đích đã có Trưởng bộ môn chưa
+      // If user is Head of Department, check if target department already has a head
       if (user.managementPosition?.slug === 'TRUONG_BO_MON') {
         const existingHead = await this.userRepository.findOne({
           where: {
@@ -289,18 +386,18 @@ export class UsersService {
 
       user.department = department;
 
-      // Tạo thông báo cho user
+      // Notify the user
       await this.notificationService.create(
         userId,
         `Bạn đã được gán vào bộ môn: ${department.name}`,
       );
     } else {
-      // Gỡ bộ môn
+      // Unlink department
       if (user.department) {
         const oldDeptName = user.department.name;
         user.department = null as any;
 
-        // Thông báo gỡ bộ môn
+        // Notify department dissociation
         await this.notificationService.create(
           userId,
           `Bạn đã được gỡ khỏi bộ môn: ${oldDeptName}`,
@@ -312,8 +409,17 @@ export class UsersService {
   }
 
   // ======================================================
-  // 8. FIND BY ROLE: Lọc users theo chức vụ + chức danh nghề nghiệp
+  // 8. FIND BY ROLE: Filter users by management position and/or job title
   // ======================================================
+  
+  /**
+   * Retrieves a list of users filtered by management position and/or job title.
+   * Ordered alphabetically by name ascending.
+   * 
+   * @param positionId Optional management position ID filter
+   * @param jobTitle Optional job title string filter
+   * @returns Array of User entities
+   */
   async findByRole(positionId?: string, jobTitle?: string) {
     const where: any = {};
 
@@ -332,27 +438,44 @@ export class UsersService {
   }
 
   // ======================================================
-  // 9. REMOVE: Xóa User
+  // 9. REMOVE: Delete User profile
   // ======================================================
+  
+  /**
+   * Deletes a user profile from the system.
+   * 
+   * @param id The ID of the user to delete
+   * @returns The deleted User entity
+   */
   async remove(id: string) {
     const user = await this.findOne(id);
     return this.userRepository.remove(user);
   }
 
   // ======================================================
-  // 10. GET USER DETAIL: Lấy chi tiết user (Profile, OKR, Đánh giá) theo kỳ
+  // 10. GET USER DETAIL: Retrieve user history metrics scoped by cycle
   // ======================================================
+  
+  /**
+   * Compiles detailed profile history for a user in a specific cycle.
+   * Includes user profile info, their OKR targets list, and quality evaluation sheet.
+   * Also returns all active cycles for frontend selection dropdowns.
+   * 
+   * @param userId The ID of the user
+   * @param cycleId Evaluation cycle filter (defaults to latest cycle)
+   * @returns Compiled detailed profile history
+   */
   async getUserDetail(userId: string, cycleId?: string) {
-    // Lấy profile user (findOne đã include roles, department, managementPosition)
+    // Fetch basic profile with mappings
     const user = await this.findOne(userId);
 
-    // Lấy tất cả các kỳ đánh giá để FE hiện dropdown
+    // Fetch all cycles for frontend selectors dropdown
     const allCycles = await this.cycleRepository.find({
       where: { isDel: false },
       order: { createdAt: 'DESC' },
     });
 
-    // Xác định kỳ cần truy vấn (mặc định là kỳ mới nhất)
+    // Resolve query cycle (default to latest)
     let targetCycleId = cycleId;
     if (!targetCycleId && allCycles.length > 0) {
       targetCycleId = allCycles[0].id;
